@@ -1,9 +1,9 @@
 # CUBE 2026 - Round 3 - Pod 05 Code Owners
-/agents/receiving/    @KiranTejaLanke
+/agents/receiving/    @KiranTejz20005
 /agents/prep/         @mdsuhana231-gif
 /agents/pack/         @nikhilagarwal03
 /agents/returns/      @upeshchowdary
 /agents/recovery/     @vishruth-16
-/orchestration/       @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejaLanke @mdsuhana231-gif
-/shared/              @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejaLanke @mdsuhana231-gif
-/tests/               @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejaLanke @mdsuhana231-gif
+/orchestration/       @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejz20005 @mdsuhana231-gif
+/shared/              @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejz20005 @mdsuhana231-gif
+/tests/               @upeshchowdary @vishruth-16 @nikhilagarwal03 @KiranTejz20005 @mdsuhana231-gif
