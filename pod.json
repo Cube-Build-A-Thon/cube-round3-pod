@@ -6,29 +6,39 @@
     {
       "role": "Receiving Manager",
       "agent": "receiving",
-      "github": ""
+      "name": "LANKE KIRAN TEJA",
+      "github": "KiranTejaLanke",
+      "email": "kiranlanke824@gmail.com"
     },
     {
       "role": "Prep Manager",
       "agent": "prep",
-      "github": ""
+      "name": "Mohammad Suhana",
+      "github": "mdsuhana231-gif",
+      "email": "mdsuhana231@gmail.com"
     },
     {
       "role": "Pack Manager",
       "agent": "pack",
-      "github": ""
+      "name": "Nikhil Agarwal",
+      "github": "nikhilagarwal03",
+      "email": "agarwalnikhil909@gmail.com"
     },
     {
       "role": "Returns Manager",
       "agent": "returns",
-      "github": "upeshchowdary"
+      "name": "KASARANENI UPESH CHOWDARY",
+      "github": "upeshchowdary",
+      "email": "UPESHCHOWDARY.K@GMAIL.COM"
     },
     {
       "role": "Recovery Manager",
       "agent": "recovery",
-      "github": "vishruth-16"
+      "name": "Vishruth Jeelakapally",
+      "github": "vishruth-16",
+      "email": "jpvishruth16@gmail.com"
     }
   ],
-  "notes": "Pod 5 - Sydon.ai x CodeQuesters CUBE 2026 Grand Finale. Fork Owner and Orchestration Coordinator: @upeshchowdary.",
+  "notes": "Pod 05 - Sydon.ai x CodeQuesters CUBE 2026 Grand Finale. Fork Owner and Orchestration Coordinator: @upeshchowdary.",
   "orchestration_coordinator": "upeshchowdary"
 }
