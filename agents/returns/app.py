@@ -1,13 +1,15 @@
 """Returns Manager: agent entry point.
 
-========================  REPLACE ME  ========================
-ORGANISER STUB replaying the Round 2 sample CSV.
-Member 4: bring your Round 2 Returns Manager here and make `handle()` call it.
+========================  ORGANISER STUB  ========================
+Organiser stub replaying the Round 2 sample CSV.
+Member 4: Upesh Chowdary (@upeshchowdary) - real Round 2 adapter integration in progress.
 The stub does NOT grade condition: Amazon's published condition scale must be looked up
-(Round 2 data leaves `amazon_condition` empty on purpose). payload.condition_graded says so.
+(Round 2 data leaves amazon_condition empty on purpose). payload.condition_graded says so.
 Run:  uvicorn agents.returns.app:app --port 8104
-===============================================================
+==================================================================
 """
+from __future__ import annotations
+
 from shared.utils import sample_data
 from shared.utils.records import build_output, build_record, check
 from shared.utils.server import make_app
