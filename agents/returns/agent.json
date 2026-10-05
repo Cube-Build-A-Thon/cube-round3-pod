@@ -1,10 +1,10 @@
 {
   "stage": "returns",
-  "agent_id": "returns-manager-rtn0045@1",
+  "agent_id": "returns-stub@0",
   "owner": "@upeshchowdary",
   "mode": "inproc",
   "url": "http://localhost:8104",
   "module": "agents.returns.app",
-  "implementation": "Returns Manager with 4-point verification (Brand, Colour, Shape, Size), perspective uncertainty, Amazon condition grading, and Rule R11 electronics safety disposition",
-  "notes": "Full AI Returns Inspection and Disposition agent ported from Round 2 repo cube26-rtn-0045-upeshchowdary."
+  "implementation": "organiser-stub",
+  "notes": "Organiser stub replaying sample data. Real Round 2 adapter integration in progress."
 }

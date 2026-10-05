@@ -1,12 +1,14 @@
-# Provenance — Returns Manager (Member 4)
+# Provenance - Returns Manager (Member 4)
 
 - **Owner**: Upesh Chowdary (@upeshchowdary)
 - **Role**: Returns Manager (Station #4)
 - **Round 2 Source Repository**: [cube26-rtn-0045-upeshchowdary](https://github.com/upeshchowdary/cube26-rtn-0045-upeshchowdary)
-- **Commit SHA**: `9669c082b8a8dce8341c1ad0e1a1154139c2c036`
-- **Key Capabilities Ported**:
+- **Target Commit SHA**: `f9b143e4e63d74ed052cf8732e38a7c1cba9a3d8`
+- **Current Status**: Organiser stub active on main while real Round 2 adapter integration is in progress on branch `returns/adapter`.
+- **Planned Capabilities to Port**:
+  - Full Round 2 Gemini Vision judgment session
   - 4-point visual identity verification (Brand, Colour, Shape, Size)
-  - Perspective & occlusion uncertainty handling (`unseen_sides_prevent_verification`)
-  - Amazon published condition grading (`New`, `Used - Like New`, `Used - Very Good`, `Used - Good`, `Used - Acceptable`, `Unacceptable`)
-  - Disposition decision engine with Rule R11 electrical safety compliance (routing opened electronics to `refurbish` rather than false `restock`)
-  - Completeness audit with cross-station upstream verification (Pack pre-seal checklist vs return parts)
+  - Perspective and occlusion uncertainty handling
+  - Amazon published condition grading (Section 11.11)
+  - Deterministic rules disposition engine
+  - Completeness audit with cross-station upstream verification
