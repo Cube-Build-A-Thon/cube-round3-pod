@@ -4,4 +4,4 @@ Keep this current. Organisers read it, and it is evidence of how the Pod actuall
 
 | Date (UTC) | Who | What we did | What we learned / what broke | Next |
 |---|---|---|---|---|
-| _YYYY-MM-DD_ | _@handle_ | _e.g. Wired Receiving agent into agents/receiving/app.py; contract test passes_ | _e.g. our model returns confidence as a percentage; converted to 0..1_ | _e.g. Prep adapter_ |
+| 2026-10-05 | @upeshchowdary | Initialized Pod 05 fork; configured `pod.json` and `.github/CODEOWNERS` for all 5 verified members (Kiran, Suhana, Nikhil, Upesh, Vishruth); ported Member 4 (Returns Manager) with 4-point verification (Brand, Colour, Shape, Size), Amazon published condition grading (§11.11), and Rule R11 electrical safety disposition policy; fixed POSIX path separators in `discover_inputs`. | Strict schema in `evidence.schema.json` rejects unexpected keys in `model` (e.g. `framework`); tightened dictionary. Windows async socket timeouts on closed ports required handling `agent_timeout` alongside `agent_unavailable`. All 92 test cases passing. | Onboard teammates to push feature branches for Receiving, Prep, Pack, and Recovery; develop unified control center UI. |
