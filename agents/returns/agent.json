@@ -1,10 +1,10 @@
 {
   "stage": "returns",
-  "agent_id": "returns-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "returns-manager-rtn0045@1",
+  "owner": "@upeshchowdary",
   "mode": "inproc",
   "url": "http://localhost:8104",
   "module": "agents.returns.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Returns Manager with 4-point verification (Brand, Colour, Shape, Size), perspective uncertainty, Amazon condition grading, and Rule R11 electronics safety disposition",
+  "notes": "Full AI Returns Inspection and Disposition agent ported from Round 2 repo cube26-rtn-0045-upeshchowdary."
 }
