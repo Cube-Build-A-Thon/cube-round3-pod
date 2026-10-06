@@ -1,36 +1,27 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
-  Bell,
+  AlertTriangle,
   Bot,
+  ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ChevronRight,
   CircleDot,
   Database,
   FileText,
   Gauge,
   GitBranch,
+  Info,
   Layers3,
+  Play,
+  RefreshCw,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Workflow,
+  X,
   XCircle,
 } from 'lucide-react'
-import { useState } from 'react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -38,24 +29,1022 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
   useParams,
   useSearchParams,
 } from 'react-router-dom'
 import {
-  analyticsData,
-  agentHealth,
-  exampleAgents,
-  failures,
-  outcomeMix,
-  recentActivity,
-  recoveryCharges,
-  reviews,
-  unitRows,
-  workflowRows,
-} from './data'
+  Bar,
+  BarChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import './App.css'
+import {
+  analyticsData,
+  exampleAgents,
+  reviews as fallbackReviews,
+} from './data'
+import {
+  api,
+  stageVariant,
+} from './services/api'
+import type {
+  CaseItem,
+  EvidenceBundle,
+  EvidenceRecord,
+  HealthResponse,
+  StageResult,
+  WorkflowState,
+} from './services/api'
 
 const queryClient = new QueryClient()
+
+// ── Fallback / Seed Workflows from out/workflows ───────────────────────────
+const SEED_WORKFLOWS: WorkflowState[] = [
+  {
+    schema_version: '1.0',
+    workflow_id: 'WF-org_demo_alpha-UNIT-0014',
+    flow_id: 'standard-v1',
+    org_id: 'org_demo_alpha',
+    subject_id: 'UNIT-0014',
+    context: { route: 'fba', returned: true },
+    status: 'COMPLETED',
+    status_reason: 'all required stages finished',
+    current_stage: 'recovery',
+    previous_stage: 'returns',
+    stage_results: [
+      {
+        stage: 'receiving',
+        agent_id: 'receiving-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'RCV-0014',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'accept',
+        needs_human: false,
+        next_step_recommendation: { action: 'continue', reason: 'Carton and invoice match; 0 failed check(s)' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:54:41Z',
+        finished_at: '2026-10-05T14:54:41Z',
+        duration_ms: 5,
+        error: null,
+      },
+      {
+        stage: 'prep',
+        agent_id: 'prep-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'PRP-0014',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'compliant',
+        needs_human: false,
+        next_step_recommendation: { action: 'continue', reason: 'No unit damage detected' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:54:41Z',
+        finished_at: '2026-10-05T14:54:41Z',
+        duration_ms: 2,
+        error: null,
+      },
+      {
+        stage: 'pack',
+        agent_id: 'pack-stub@0',
+        state: 'skipped',
+        skipped_reason: "route='fba' not in ['mfn']",
+        record_id: null,
+        evidence_status: null,
+        verdict: null,
+        outcome: null,
+        needs_human: null,
+        next_step_recommendation: null,
+        runs: 0,
+        attempts: 0,
+        started_at: null,
+        finished_at: null,
+        duration_ms: null,
+        error: null,
+      },
+      {
+        stage: 'returns',
+        agent_id: 'returns-manager-rtn0045@1',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'RTN-0014',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'refurbish',
+        needs_human: false,
+        next_step_recommendation: { action: 'continue', reason: 'Return acceptability confirmed; electrical safety review recommended.' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:54:41Z',
+        finished_at: '2026-10-05T14:54:41Z',
+        duration_ms: 2,
+        error: null,
+      },
+      {
+        stage: 'recovery',
+        agent_id: 'recovery-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'RCY-UNIT-0014',
+        evidence_status: 'completed',
+        verdict: 'FAIL',
+        outcome: 'claim_recommended',
+        needs_human: false,
+        next_step_recommendation: { action: 'complete', reason: '4 charges reviewed; 1 contradicted ($2.00 claimable)' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:54:41Z',
+        finished_at: '2026-10-05T14:54:41Z',
+        duration_ms: 2,
+        error: null,
+      },
+    ],
+    evidence_references: ['RCV-0014', 'PRP-0014', 'RTN-0014', 'RCY-UNIT-0014'],
+    timestamps: { created_at: '2026-10-05T14:54:41Z', updated_at: '2026-10-05T15:07:21Z', completed_at: '2026-10-05T15:07:21Z' },
+    errors: [],
+    overrides: [],
+    halted: null,
+    final_outcome: {
+      workflow_id: 'WF-org_demo_alpha-UNIT-0014',
+      outcome: 'CLAIM_RECOMMENDED',
+      verdict: 'FAIL',
+      reason: 'Recovery contradicted at least one charge (claimable $2.00).',
+      needs_human: false,
+      provisional: false,
+      claimable_usd: 2.0,
+      contributing_records: ['RCV-0014', 'PRP-0014', 'RTN-0014', 'RCY-UNIT-0014'],
+      effective_verdicts: { receiving: 'PASS', prep: 'PASS', returns: 'PASS', recovery: 'FAIL' },
+      decided_by: 'orchestrator',
+      decided_at: '2026-10-05T15:07:21Z',
+    },
+    transitions: [
+      { at: '2026-10-05T14:54:41Z', event: 'workflow_created', stage: null, detail: 'flow=standard-v1' },
+      { at: '2026-10-05T14:54:41Z', event: 'stage_skipped', stage: 'pack', detail: "route='fba' not in ['mfn']" },
+      { at: '2026-10-05T14:54:41Z', event: 'stage_completed', stage: 'receiving', detail: 'accept / PASS' },
+      { at: '2026-10-05T14:54:41Z', event: 'stage_completed', stage: 'prep', detail: 'compliant / PASS' },
+      { at: '2026-10-05T14:54:41Z', event: 'stage_completed', stage: 'returns', detail: 'refurbish / PASS' },
+      { at: '2026-10-05T14:54:41Z', event: 'stage_completed', stage: 'recovery', detail: 'claim_recommended / FAIL' },
+      { at: '2026-10-05T15:07:21Z', event: 'final_outcome_decided', stage: null, detail: 'CLAIM_RECOMMENDED' },
+    ],
+  },
+  {
+    schema_version: '1.0',
+    workflow_id: 'WF-org_demo_alpha-UNIT-0018',
+    flow_id: 'standard-v1',
+    org_id: 'org_demo_alpha',
+    subject_id: 'UNIT-0018',
+    context: { route: 'fba', returned: false },
+    status: 'BLOCKED',
+    status_reason: 'no receiving record for UNIT-0018 in org_demo_alpha',
+    current_stage: 'receiving',
+    previous_stage: null,
+    stage_results: [
+      {
+        stage: 'receiving',
+        agent_id: 'receiving-stub@0',
+        state: 'error',
+        skipped_reason: null,
+        record_id: 'RCV-PENDING-WF-org_demo_alpha-UNIT-0018-receiving',
+        evidence_status: 'error',
+        verdict: 'UNCERTAIN',
+        outcome: 'pending_review',
+        needs_human: true,
+        next_step_recommendation: { action: 'review', reason: 'Receiving record mismatch requires human verification.' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:55:04Z',
+        finished_at: '2026-10-05T14:55:04Z',
+        duration_ms: 1,
+        error: { message: 'no receiving record for UNIT-0018 in org_demo_alpha' },
+      },
+    ],
+    evidence_references: ['RCV-PENDING-WF-org_demo_alpha-UNIT-0018-receiving'],
+    timestamps: { created_at: '2026-10-05T14:55:04Z', updated_at: '2026-10-05T14:55:04Z', completed_at: null },
+    errors: [{ stage: 'receiving', message: 'no receiving record for UNIT-0018 in org_demo_alpha' }],
+    overrides: [],
+    halted: { stage: 'receiving', reason: 'no receiving record for UNIT-0018', at: '2026-10-05T14:55:04Z' },
+    final_outcome: null,
+    transitions: [
+      { at: '2026-10-05T14:55:04Z', event: 'workflow_created', stage: null, detail: 'flow=standard-v1' },
+      { at: '2026-10-05T14:55:04Z', event: 'stage_halted', stage: 'receiving', detail: 'UNCERTAIN verdict requires human review' },
+    ],
+  },
+  {
+    schema_version: '1.0',
+    workflow_id: 'WF-org_demo_alpha-UNIT-0002',
+    flow_id: 'standard-v1',
+    org_id: 'org_demo_alpha',
+    subject_id: 'UNIT-0002',
+    context: { route: 'fba', returned: false },
+    status: 'COMPLETED',
+    status_reason: 'all required stages finished',
+    current_stage: 'recovery',
+    previous_stage: 'prep',
+    stage_results: [
+      {
+        stage: 'receiving',
+        agent_id: 'receiving-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'RCV-0002',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'accept',
+        needs_human: false,
+        next_step_recommendation: { action: 'continue', reason: 'Inbound verified' },
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:50:00Z',
+        finished_at: '2026-10-05T14:50:01Z',
+        duration_ms: 4,
+        error: null,
+      },
+      {
+        stage: 'prep',
+        agent_id: 'prep-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'PRP-0002',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'compliant',
+        needs_human: false,
+        next_step_recommendation: null,
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:50:01Z',
+        finished_at: '2026-10-05T14:50:02Z',
+        duration_ms: 3,
+        error: null,
+      },
+      {
+        stage: 'pack',
+        agent_id: 'pack-stub@0',
+        state: 'skipped',
+        skipped_reason: "route='fba' not in ['mfn']",
+        record_id: null,
+        evidence_status: null,
+        verdict: null,
+        outcome: null,
+        needs_human: null,
+        next_step_recommendation: null,
+        runs: 0,
+        attempts: 0,
+        started_at: null,
+        finished_at: null,
+        duration_ms: null,
+        error: null,
+      },
+      {
+        stage: 'returns',
+        agent_id: null,
+        state: 'skipped',
+        skipped_reason: 'returned=false not in [True]',
+        record_id: null,
+        evidence_status: null,
+        verdict: null,
+        outcome: null,
+        needs_human: null,
+        next_step_recommendation: null,
+        runs: 0,
+        attempts: 0,
+        started_at: null,
+        finished_at: null,
+        duration_ms: null,
+        error: null,
+      },
+      {
+        stage: 'recovery',
+        agent_id: 'recovery-stub@0',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: 'RCY-UNIT-0002',
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'no_claim',
+        needs_human: false,
+        next_step_recommendation: null,
+        runs: 1,
+        attempts: 1,
+        started_at: '2026-10-05T14:50:02Z',
+        finished_at: '2026-10-05T14:50:03Z',
+        duration_ms: 2,
+        error: null,
+      },
+    ],
+    evidence_references: ['RCV-0002', 'RCY-UNIT-0002'],
+    timestamps: { created_at: '2026-10-05T14:50:00Z', updated_at: '2026-10-05T14:50:03Z', completed_at: '2026-10-05T14:50:03Z' },
+    errors: [],
+    overrides: [],
+    halted: null,
+    final_outcome: {
+      workflow_id: 'WF-org_demo_alpha-UNIT-0002',
+      outcome: 'CLEAN',
+      verdict: 'PASS',
+      reason: 'No charge disputes or condition defects found.',
+      needs_human: false,
+      provisional: false,
+      claimable_usd: 0.0,
+      contributing_records: ['RCV-0002', 'RCY-UNIT-0002'],
+      effective_verdicts: { receiving: 'PASS', prep: 'PASS', recovery: 'PASS' },
+      decided_by: 'orchestrator',
+      decided_at: '2026-10-05T14:50:03Z',
+    },
+    transitions: [
+      { at: '2026-10-05T14:50:00Z', event: 'workflow_created', stage: null, detail: 'flow=standard-v1' },
+      { at: '2026-10-05T14:50:03Z', event: 'final_outcome_decided', stage: null, detail: 'CLEAN' },
+    ],
+  },
+]
+
+const DEFAULT_CASES: CaseItem[] = [
+  { org_id: 'org_demo_alpha', unit_id: 'UNIT-0014', route: 'fba', returned: true },
+  { org_id: 'org_demo_alpha', unit_id: 'UNIT-0018', route: 'fba', returned: false },
+  { org_id: 'org_demo_alpha', unit_id: 'UNIT-0002', route: 'fba', returned: false },
+  { org_id: 'org_demo_alpha', unit_id: 'UNIT-0004', route: 'fba', returned: false },
+  { org_id: 'org_demo_bravo', unit_id: 'UNIT-0003', route: 'fba', returned: true },
+  { org_id: 'org_demo_bravo', unit_id: 'UNIT-0006', route: 'mfn', returned: false },
+]
+
+// ── App Context ───────────────────────────────────────────────────────────
+interface AppContextType {
+  workflows: WorkflowState[]
+  health: HealthResponse | null
+  cases: CaseItem[]
+  isBackendConnected: boolean
+  refreshData: () => Promise<void>
+  openRunModal: () => void
+  openOverrideModal: (ctx: { workflowId: string; recordId: string; currentVerdict: string; stage?: string }) => void
+  openEvidenceDrawer: (record: EvidenceRecord) => void
+  handleRunWorkflow: (orgId: string, unitId: string, route?: string, returned?: boolean) => Promise<WorkflowState>
+  handleResumeWorkflow: (workflowId: string) => Promise<WorkflowState>
+  handleApplyOverride: (
+    workflowId: string,
+    recordId: string,
+    newVerdict: string,
+    actor: string,
+    reason: string,
+    newOutcome?: string,
+    autoResume?: boolean,
+  ) => Promise<WorkflowState>
+}
+
+const AppContext = createContext<AppContextType | null>(null)
+
+export function useApp() {
+  const ctx = useContext(AppContext)
+  if (!ctx) throw new Error('useApp must be used inside AppProvider')
+  return ctx
+}
+
+// ── Main App Component ────────────────────────────────────────────────────
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AppProvider>
+          <Shell />
+        </AppProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}
+
+function AppProvider({ children }: { children: React.ReactNode }) {
+  const [workflows, setWorkflows] = useState<WorkflowState[]>(SEED_WORKFLOWS)
+  const [health, setHealth] = useState<HealthResponse | null>(null)
+  const [cases, setCases] = useState<CaseItem[]>(DEFAULT_CASES)
+  const [isBackendConnected, setIsBackendConnected] = useState(false)
+
+  // Modals & Drawer State
+  const [runModalOpen, setRunModalOpen] = useState(false)
+  const [overrideModalContext, setOverrideModalContext] = useState<{
+    workflowId: string
+    recordId: string
+    currentVerdict: string
+    stage?: string
+  } | null>(null)
+  const [selectedEvidenceRecord, setSelectedEvidenceRecord] = useState<EvidenceRecord | null>(null)
+
+  const refreshData = async () => {
+    try {
+      const [healthRes, casesRes] = await Promise.all([
+        api.health().catch(() => null),
+        api.cases().catch(() => null),
+      ])
+
+      if (healthRes) {
+        setHealth(healthRes)
+        setIsBackendConnected(true)
+      } else {
+        setIsBackendConnected(false)
+      }
+
+      if (casesRes && casesRes.length > 0) {
+        setCases(casesRes)
+        // Probe top workflows
+        const probeList = casesRes.slice(0, 10).map((c) => `WF-${c.org_id}-${c.unit_id}`)
+        const fetchedWfs = await Promise.allSettled(probeList.map((id) => api.getWorkflow(id)))
+        const validWfs = fetchedWfs
+          .filter((res): res is PromiseFulfilledResult<WorkflowState> => res.status === 'fulfilled')
+          .map((res) => res.value)
+
+        if (validWfs.length > 0) {
+          setWorkflows((prev) => {
+            const map = new Map<string, WorkflowState>()
+            prev.forEach((w) => map.set(w.workflow_id, w))
+            validWfs.forEach((w) => map.set(w.workflow_id, w))
+            return Array.from(map.values())
+          })
+        }
+      }
+    } catch {
+      // Graceful offline fallback
+    }
+  }
+
+  useEffect(() => {
+    refreshData()
+    const interval = setInterval(refreshData, 15000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleRunWorkflow = async (orgId: string, unitId: string, route?: string, returned?: boolean) => {
+    try {
+      const res = await api.runWorkflow(orgId, unitId, route, returned)
+      setWorkflows((prev) => [res, ...prev.filter((w) => w.workflow_id !== res.workflow_id)])
+      return res
+    } catch (err) {
+      // Simulate run locally if backend is unavailable so UI works offline
+      const mockId = `WF-${orgId}-${unitId}`
+      const newWf: WorkflowState = {
+        schema_version: '1.0',
+        workflow_id: mockId,
+        flow_id: 'standard-v1',
+        org_id: orgId,
+        subject_id: unitId,
+        context: { route: route || 'fba', returned: Boolean(returned) },
+        status: returned ? 'COMPLETED' : 'IN_PROGRESS',
+        status_reason: 'Automated workflow run dispatched',
+        current_stage: 'recovery',
+        previous_stage: 'returns',
+        stage_results: [
+          {
+            stage: 'receiving',
+            agent_id: 'receiving-stub@0',
+            state: 'completed',
+            skipped_reason: null,
+            record_id: `RCV-${unitId.replace('UNIT-', '')}`,
+            evidence_status: 'completed',
+            verdict: 'PASS',
+            outcome: 'accept',
+            needs_human: false,
+            next_step_recommendation: { action: 'continue', reason: 'Inspection verified' },
+            runs: 1,
+            attempts: 1,
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+            duration_ms: 8,
+            error: null,
+          },
+        ],
+        evidence_references: [`RCV-${unitId.replace('UNIT-', '')}`],
+        timestamps: { created_at: new Date().toISOString(), updated_at: new Date().toISOString(), completed_at: null },
+        errors: [],
+        overrides: [],
+        halted: null,
+        final_outcome: null,
+        transitions: [{ at: new Date().toISOString(), event: 'workflow_created', stage: null, detail: 'flow=standard-v1' }],
+      }
+      setWorkflows((prev) => [newWf, ...prev.filter((w) => w.workflow_id !== mockId)])
+      return newWf
+    }
+  }
+
+  const handleResumeWorkflow = async (workflowId: string) => {
+    try {
+      const res = await api.resumeWorkflow(workflowId)
+      setWorkflows((prev) => prev.map((w) => (w.workflow_id === workflowId ? res : w)))
+      return res
+    } catch {
+      // Local fallback resume
+      let updatedWf: WorkflowState | null = null
+      setWorkflows((prev) =>
+        prev.map((w) => {
+          if (w.workflow_id === workflowId) {
+            updatedWf = {
+              ...w,
+              status: 'COMPLETED',
+              status_reason: 'Resumed and finished stages',
+              halted: null,
+              transitions: [
+                ...w.transitions,
+                { at: new Date().toISOString(), event: 'workflow_resumed', stage: w.current_stage, detail: 'Operator resumed workflow' },
+              ],
+            }
+            return updatedWf
+          }
+          return w
+        })
+      )
+      if (updatedWf) return updatedWf
+      throw new Error('Workflow not found')
+    }
+  }
+
+  const handleApplyOverride = async (
+    workflowId: string,
+    recordId: string,
+    newVerdict: string,
+    actor: string,
+    reason: string,
+    newOutcome?: string,
+    autoResume = true
+  ) => {
+    try {
+      let res = await api.applyOverride(workflowId, recordId, newVerdict, actor, reason, newOutcome)
+      if (autoResume) {
+        try {
+          res = await api.resumeWorkflow(workflowId)
+        } catch {
+          // ignore resume error if override succeeded
+        }
+      }
+      setWorkflows((prev) => prev.map((w) => (w.workflow_id === workflowId ? res : w)))
+      return res
+    } catch {
+      // Local fallback override
+      let updatedWf: WorkflowState | null = null
+      setWorkflows((prev) =>
+        prev.map((w) => {
+          if (w.workflow_id === workflowId) {
+            const overrideEntry = {
+              override_id: `OVR-${Date.now().toString(36)}`,
+              supersedes: { record_id: recordId, override_id: null },
+              target: recordId,
+              actor,
+              at: new Date().toISOString(),
+              reason,
+              original_verdict: 'UNCERTAIN',
+              previous_verdict: 'UNCERTAIN',
+              new_verdict: newVerdict,
+              new_outcome: newOutcome || null,
+            }
+            const updatedStageResults = w.stage_results.map((stg) => {
+              if (stg.record_id === recordId || stg.stage === (overrideModalContext?.stage || stg.stage)) {
+                return {
+                  ...stg,
+                  verdict: newVerdict,
+                  state: 'completed' as const,
+                  needs_human: false,
+                  next_step_recommendation: { action: 'continue', reason: `Overridden by ${actor}: ${reason}` },
+                }
+              }
+              return stg
+            })
+
+            updatedWf = {
+              ...w,
+              status: autoResume ? 'COMPLETED' : 'IN_PROGRESS',
+              status_reason: `Override applied by ${actor}`,
+              stage_results: updatedStageResults,
+              halted: null,
+              overrides: [...w.overrides, overrideEntry],
+              transitions: [
+                ...w.transitions,
+                { at: new Date().toISOString(), event: 'human_override_created', stage: w.current_stage, detail: `${newVerdict} by ${actor}` },
+              ],
+            }
+            return updatedWf
+          }
+          return w
+        })
+      )
+      if (updatedWf) return updatedWf
+      throw new Error('Workflow not found')
+    }
+  }
+
+  const value: AppContextType = {
+    workflows,
+    health,
+    cases,
+    isBackendConnected,
+    refreshData,
+    openRunModal: () => setRunModalOpen(true),
+    openOverrideModal: (ctx) => setOverrideModalContext(ctx),
+    openEvidenceDrawer: (record) => setSelectedEvidenceRecord(record),
+    handleRunWorkflow,
+    handleResumeWorkflow,
+    handleApplyOverride,
+  }
+
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+      {runModalOpen && <RunWorkflowModal onClose={() => setRunModalOpen(false)} />}
+      {overrideModalContext && (
+        <OverrideModal
+          context={overrideModalContext}
+          onClose={() => setOverrideModalContext(null)}
+        />
+      )}
+      {selectedEvidenceRecord && (
+        <EvidenceRecordDrawer
+          record={selectedEvidenceRecord}
+          onClose={() => setSelectedEvidenceRecord(null)}
+        />
+      )}
+    </AppContext.Provider>
+  )
+}
+
+// ── Modals & Drawer ────────────────────────────────────────────────────────
+
+function RunWorkflowModal({ onClose }: { onClose: () => void }) {
+  const { cases, handleRunWorkflow } = useApp()
+  const navigate = useNavigate()
+  const [mode, setMode] = useState<'preset' | 'custom'>('preset')
+  const [selectedCaseIdx, setSelectedCaseIdx] = useState(0)
+  const [orgId, setOrgId] = useState('org_demo_alpha')
+  const [unitId, setUnitId] = useState('UNIT-0014')
+  const [route, setRoute] = useState<'fba' | 'mfn'>('fba')
+  const [returned, setReturned] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      let targetOrg = orgId
+      let targetUnit = unitId
+      let targetRoute = route
+      let targetReturned = returned
+
+      if (mode === 'preset' && cases[selectedCaseIdx]) {
+        const c = cases[selectedCaseIdx]
+        targetOrg = c.org_id
+        targetUnit = c.unit_id
+        targetRoute = (c.route as 'fba' | 'mfn') || 'fba'
+        targetReturned = Boolean(c.returned)
+      }
+
+      const res = await handleRunWorkflow(targetOrg, targetUnit, targetRoute, targetReturned)
+      onClose()
+      navigate(`/workflows/${res.workflow_id}`)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to dispatch workflow')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Run Workflow</h3>
+            <p className="modal-subtitle">Dispatch commerce orchestration for an inventory unit</p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-body">
+          <div className="toggle-group">
+            <button
+              type="button"
+              className={`toggle-btn ${mode === 'preset' ? 'active' : ''}`}
+              onClick={() => setMode('preset')}
+            >
+              Demo Cases ({cases.length})
+            </button>
+            <button
+              type="button"
+              className={`toggle-btn ${mode === 'custom' ? 'active' : ''}`}
+              onClick={() => setMode('custom')}
+            >
+              Custom Unit
+            </button>
+          </div>
+
+          {mode === 'preset' ? (
+            <div className="form-group">
+              <label className="form-label">Select Case</label>
+              <select
+                className="form-select"
+                value={selectedCaseIdx}
+                onChange={(e) => setSelectedCaseIdx(Number(e.target.value))}
+              >
+                {cases.map((c, idx) => (
+                  <option key={`${c.org_id}-${c.unit_id}-${idx}`} value={idx}>
+                    {c.unit_id} · {c.org_id} (Route: {c.route?.toUpperCase() || 'FBA'}, Returned: {c.returned ? 'YES' : 'NO'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Organization ID</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={orgId}
+                    onChange={(e) => setOrgId(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit ID</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={unitId}
+                    onChange={(e) => setUnitId(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Route</label>
+                  <select
+                    className="form-select"
+                    value={route}
+                    onChange={(e) => setRoute(e.target.value as 'fba' | 'mfn')}
+                  >
+                    <option value="fba">FBA (Fulfillment by Amazon)</option>
+                    <option value="mfn">MFN (Merchant Fulfilled)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Returned?</label>
+                  <select
+                    className="form-select"
+                    value={returned ? 'yes' : 'no'}
+                    onChange={(e) => setReturned(e.target.value === 'yes')}
+                  >
+                    <option value="yes">YES (Includes Returns Inspection)</option>
+                    <option value="no">NO</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+
+          {error && <div className="incident-alert"><p style={{ color: '#c46b64' }}>{error}</p></div>}
+
+          <div className="modal-footer">
+            <button type="button" className="secondary-button small" onClick={onClose} disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="primary-button small" disabled={loading}>
+              {loading ? <span className="spinner-inline" /> : <Play size={13} style={{ marginRight: 6 }} />}
+              {loading ? 'Orchestrating...' : 'Launch Workflow'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function OverrideModal({
+  context,
+  onClose,
+}: {
+  context: { workflowId: string; recordId: string; currentVerdict: string; stage?: string }
+  onClose: () => void
+}) {
+  const { handleApplyOverride } = useApp()
+  const [actor, setActor] = useState('operator_upesh')
+  const [newVerdict, setNewVerdict] = useState<'PASS' | 'FAIL' | 'UNCERTAIN'>('PASS')
+  const [reason, setReason] = useState('')
+  const [newOutcome, setNewOutcome] = useState('')
+  const [autoResume, setAutoResume] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reason.trim()) {
+      setError('Please provide a reason explaining the operational override.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      await handleApplyOverride(
+        context.workflowId,
+        context.recordId,
+        newVerdict,
+        actor,
+        reason,
+        newOutcome || undefined,
+        autoResume
+      )
+      onClose()
+    } catch (err: any) {
+      setError(err?.message || 'Failed to submit override')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Human Intervention & Override</h3>
+            <p className="modal-subtitle">
+              Workflow: <strong>{context.workflowId}</strong> · Record: <strong>{context.recordId}</strong>
+            </p>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Reviewer / Operator ID</label>
+              <input
+                type="text"
+                className="form-input"
+                value={actor}
+                onChange={(e) => setActor(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">New Verdict</label>
+              <select
+                className="form-select"
+                value={newVerdict}
+                onChange={(e) => setNewVerdict(e.target.value as any)}
+              >
+                <option value="PASS">PASS (Approve stage)</option>
+                <option value="FAIL">FAIL (Reject / Claimable)</option>
+                <option value="UNCERTAIN">UNCERTAIN (Escalate)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Operational Justification / Reason *</label>
+            <textarea
+              className="form-textarea"
+              placeholder="e.g. Physical carton inspection verified. Barcode clear and seals unbroken."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">New Outcome (Optional)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. compliant, refurbish, restock"
+              value={newOutcome}
+              onChange={(e) => setNewOutcome(e.target.value)}
+            />
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={autoResume}
+              onChange={(e) => setAutoResume(e.target.checked)}
+            />
+            Automatically resume workflow after override
+          </label>
+
+          {error && <div className="incident-alert"><p style={{ color: '#c46b64' }}>{error}</p></div>}
+
+          <div className="modal-footer">
+            <button type="button" className="secondary-button small" onClick={onClose} disabled={loading}>
+              Cancel
+            </button>
+            <button type="submit" className="primary-button small" disabled={loading}>
+              {loading ? <span className="spinner-inline" /> : <SlidersHorizontal size={13} style={{ marginRight: 6 }} />}
+              {loading ? 'Applying...' : 'Apply Override'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function EvidenceRecordDrawer({ record, onClose }: { record: EvidenceRecord; onClose: () => void }) {
+  return (
+    <div className="evidence-drawer-overlay" onClick={onClose}>
+      <div className="evidence-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="eyebrow">Evidence Record</div>
+            <h2 style={{ margin: '4px 0 0', fontSize: 18 }}>{record.record_id}</h2>
+          </div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close drawer">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="drawer-section">
+          <div className="drawer-label">Metadata</div>
+          <div className="key-value"><span>Workflow</span><strong>{record.workflow_id}</strong></div>
+          <div className="key-value"><span>Stage</span><strong>{record.stage.toUpperCase()}</strong></div>
+          <div className="key-value"><span>Agent</span><strong>{record.agent_id}</strong></div>
+          <div className="key-value"><span>Status</span><strong>{record.status}</strong></div>
+          <div className="key-value">
+            <span>Verdict</span>
+            <StatusBadge
+              label={record.decision?.verdict || 'N/A'}
+              variant={stageVariant(record.decision?.verdict || null, record.status)}
+            />
+          </div>
+        </div>
+
+        {record.decision?.reason && (
+          <div className="drawer-section">
+            <div className="drawer-label">Decision Note</div>
+            <p style={{ margin: 0, fontSize: 13, color: '#2a2f2d', lineHeight: 1.5 }}>
+              {record.decision.reason}
+            </p>
+          </div>
+        )}
+
+        {record.checks && record.checks.length > 0 && (
+          <div className="drawer-section">
+            <div className="drawer-label">Rule & Quality Checks ({record.checks.length})</div>
+            <div className="table-card" style={{ margin: 0 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Check</th>
+                    <th>Verdict</th>
+                    <th>Observed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {record.checks.map((chk, i) => (
+                    <tr key={chk.check_key || i}>
+                      <td><small>{chk.check_key}</small></td>
+                      <td>
+                        <StatusBadge
+                          label={chk.verdict}
+                          variant={chk.verdict === 'PASS' ? 'success' : chk.verdict === 'FAIL' ? 'danger' : 'warning'}
+                        />
+                      </td>
+                      <td><small>{chk.observed || chk.detail || '—'}</small></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {record.payload && Object.keys(record.payload).length > 0 && (
+          <div className="drawer-section">
+            <div className="drawer-label">Payload Data</div>
+            <pre className="json-viewer">{JSON.stringify(record.payload, null, 2)}</pre>
+          </div>
+        )}
+
+        {record.content_hash && (
+          <div className="drawer-section">
+            <div className="drawer-label">Immutable Hash (SHA-256)</div>
+            <div className="hash-badge">{record.content_hash}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── App Shell ─────────────────────────────────────────────────────────────
 
 const sidebarItems = [
   { to: '/overview', label: 'Overview', icon: Layers3 },
@@ -70,29 +1059,182 @@ const sidebarItems = [
   { to: '/system', label: 'Pod / System', icon: CircleDot },
 ]
 
-function App() {
+function Shell() {
+  const location = useLocation()
+  const { workflows, isBackendConnected, refreshData, openRunModal, openOverrideModal, handleResumeWorkflow } = useApp()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Find if there is any active halted or blocked workflow to warn in banner
+  const blockedWorkflow = useMemo(() => {
+    return workflows.find((w) => w.status === 'BLOCKED' || Boolean(w.halted))
+  }, [workflows])
+
+  if (location.pathname === '/') {
+    return <CoverPage />
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <div className="app-shell">
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="brand-block">
+          <button
+            type="button"
+            className="collapse-toggle"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
+          </button>
+          <div className="brand-mark">C</div>
+          <div className="brand-copy">
+            <div className="brand-title">CUBE</div>
+            <div className="brand-subtitle">Pod 05</div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Sidebar navigation">
+          {sidebarItems.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              title={label}
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              <Icon size={16} />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="micro-label">POD STATUS</div>
+          <div className="system-row">
+            <span>Commerce Ops</span>
+          </div>
+          <div className={`system-row ${isBackendConnected ? 'healthy' : ''}`}>
+            <span className={`status-dot ${isBackendConnected ? 'healthy-dot' : ''}`} />
+            <span>Orchestrator</span>
+            <span className="status-meta">{isBackendConnected ? 'Online (8100)' : 'Local Mode'}</span>
+          </div>
+        </div>
+      </aside>
+
+      <div className="main-panel">
+        <header className="topbar">
+          <div className="topbar-left">
+            <div className="crumb-inline">CUBE / POD 05 / LIVE OPERATIONS</div>
+          </div>
+          <div className="topbar-actions">
+            <button type="button" className="search-box" onClick={openRunModal}>
+              <Search size={15} />
+              <span>Run or find workflow...</span>
+              <kbd>+ Run</kbd>
+            </button>
+            <div className="org-tag">Org: demo_alpha</div>
+            <div className="health-tag">
+              <span className={`status-dot ${isBackendConnected ? 'healthy-dot' : ''}`} />
+              {isBackendConnected ? 'Live API Connected' : 'Pod Ready'}
+            </div>
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => refreshData()}
+              title="Refresh Pod Data"
+            >
+              <RefreshCw size={14} />
+            </button>
+            <div className="user-pill">UP</div>
+          </div>
+        </header>
+
+        <main className="router-shell">
+          {blockedWorkflow && (
+            <div style={{ padding: '16px 28px 0' }}>
+              <div className="blocked-banner">
+                <div className="blocked-banner-left">
+                  <div className="blocked-banner-icon">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div>
+                    <div className="blocked-banner-title">
+                      Workflow Blocked: {blockedWorkflow.workflow_id} ({blockedWorkflow.subject_id})
+                    </div>
+                    <div className="blocked-banner-desc">
+                      Stage &quot;{blockedWorkflow.current_stage}&quot; requires human intervention —{' '}
+                      {blockedWorkflow.halted?.reason || blockedWorkflow.status_reason || 'Verdict uncertain'}
+                    </div>
+                  </div>
+                </div>
+                <div className="blocked-banner-actions">
+                  <button
+                    type="button"
+                    className="primary-button small"
+                    onClick={() =>
+                      openOverrideModal({
+                        workflowId: blockedWorkflow.workflow_id,
+                        recordId:
+                          blockedWorkflow.stage_results.find((s) => s.needs_human)?.record_id ||
+                          `REC-${blockedWorkflow.subject_id}`,
+                        currentVerdict: 'UNCERTAIN',
+                        stage: blockedWorkflow.current_stage || undefined,
+                      })
+                    }
+                  >
+                    Intervene & Override
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button small"
+                    onClick={() => handleResumeWorkflow(blockedWorkflow.workflow_id)}
+                  >
+                    Resume
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Routes>
+            <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/dashboard" element={<OverviewPage />} />
+            <Route path="/workflows" element={<WorkflowsPage />} />
+            <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+            <Route path="/units" element={<UnitsPage />} />
+            <Route path="/units/:id" element={<UnitDetailPage />} />
+            <Route path="/reviews" element={<ReviewQueuePage />} />
+            <Route path="/recovery" element={<RecoveryPage />} />
+            <Route path="/recovery/charges/:id" element={<RecoveryChargeDetailPage />} />
+            <Route path="/evidence" element={<EvidencePage />} />
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/agents/:slug" element={<AgentDetailPage />} />
+            <Route path="/failures" element={<FailuresPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/system" element={<SystemPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </main>
+
+        <footer className="status-bar">
+          <span className="status-label">Live</span>
+          <span className="status-pulse" />
+          <span>{location.pathname.replace('/', '') || 'overview'}</span>
+          <span className="status-separator" />
+          <span>{workflows.length} workflows tracked</span>
+          <span className="status-separator" />
+          <span>{isBackendConnected ? 'Connected to http://localhost:8100' : 'Offline / Standalone mode'}</span>
+        </footer>
+      </div>
+    </div>
   )
 }
+
+// ── Pages ─────────────────────────────────────────────────────────────────
 
 function CoverPage() {
   const workflowSteps = [
     { id: '01', label: 'Connect', title: 'Connect your commerce account', detail: 'Securely synchronize vendors, SKUs, inventory, and shipment state into one operating context.', tone: 'purple' },
     { id: '02', label: 'Scan', title: 'Agents scan your full catalog', detail: 'CUBE agents identify conditions, risk signals, and recovery opportunities across every unit.', tone: 'green' },
     { id: '03', label: 'Decide', title: 'Auto-prioritize the next action', detail: 'The system routes each unit through receiving, recovery, and final disposition with evidence.', tone: 'blue' },
-  ]
-
-  const signalCards = [
-    'Receive',
-    'Prep',
-    'Review',
-    'Recovery',
-    'Outcome',
   ]
 
   return (
@@ -152,273 +1294,119 @@ function CoverPage() {
                 </div>
               ))}
             </div>
-
-            <div className="flow-visual-card">
-              <span className="card-badge">STEP 1 CONNECT</span>
-              <div className="mini-brand">cube</div>
-              <div className="flow-illustration">
-                <div className="ring-core">
-                  <span>SYNC</span>
+            <div className="flow-column right-column">
+              {workflowSteps.slice(2).map((step) => (
+                <div key={step.id} className="step-item">
+                  <span className={`step-index ${step.tone}`}>{step.id}</span>
+                  <div className={`step-label label-${step.tone}`}>{step.label}</div>
+                  <h3>{step.title}</h3>
+                  <p>{step.detail}</p>
                 </div>
-              </div>
-              <div className="visual-pill">SP-API • Inventory • Recovery</div>
+              ))}
             </div>
           </div>
-        </section>
-
-        <section className="under-hood-section">
-          <h2>under the hood</h2>
-          <p>
-            Dive into the agents, architecture, channels, and outcomes that power the CUBE operating system.
-          </p>
-          <button type="button" className="primary-button wide-button small-button">
-            Know more about us <ChevronRight size={16} />
-          </button>
-        </section>
-
-        <section className="workflow-hero">
-          <div className="workflow-copy">
-            <span className="mini-title">Orchestrated.</span>
-            <h2>Every workflow.</h2>
-            <h3>Every channel.</h3>
-          </div>
-
-          <div className="workflow-brand-panel">
-            <div className="panel-wordmark">cube</div>
-            <div className="wave-line" />
-            <div className="panel-note">The operating system for modern commerce.</div>
-          </div>
-        </section>
-
-        <section className="feature-showcase">
-          <div className="feature-copy">
-            <h2>Dynamic Pricer</h2>
-            <p>
-              Wins the buy box without sacrificing margin. CUBE pricing logic updates in real time, sets margin floors,
-              surfaces pricing decisions, and keeps every recommendation aligned to live channel conditions.
-            </p>
-            <ul>
-              <li>Win the buy box without sacrificing margin</li>
-              <li>Set minimum profit floors that never get breached</li>
-              <li>Replace cross-your-full-catalog manual work with live scoring</li>
-              <li>Approve every price change before it goes live</li>
-            </ul>
-          </div>
-
-          <div className="feature-preview">
-            <div className="preview-window">
-              <div className="preview-header">
-                <span className="window-dot" />
-                <span className="window-dot" />
-                <span className="window-dot" />
-              </div>
-              <div className="preview-body">
-                <div className="mini-metrics">
-                  <span>SKU</span>
-                  <span>Margin</span>
-                  <span>Price</span>
-                </div>
-                {signalCards.map((item, index) => (
-                  <div key={item} className={`metric-row signal-${index + 1}`}>
-                    <span>{item}</span>
-                    <strong>{index % 2 === 0 ? 'Healthy' : 'Live'}</strong>
-                    <em>{index === 0 ? '$29.80' : index === 1 ? '$31.20' : '$34.40'}</em>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="closing-section">
-          <div className="closing-meta">07 • LIVE IN RETAIL</div>
-          <div className="closing-title">Review Intelligence</div>
         </section>
       </main>
-
-      <button type="button" className="floating-up-button" aria-label="Scroll to top">
-        <ChevronRight size={18} />
-      </button>
-    </div>
-  )
-}
-
-function Shell() {
-  const location = useLocation()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-
-  if (location.pathname === '/') {
-    return <CoverPage />
-  }
-
-  return (
-    <div className="app-shell">
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="brand-block">
-          <button
-            type="button"
-            className="collapse-toggle"
-            onClick={() => setSidebarCollapsed((value) => !value)}
-            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? <ChevronsRight size={15} /> : <ChevronsLeft size={15} />}
-          </button>
-          <div className="brand-mark">C</div>
-          <div className="brand-copy">
-            <div className="brand-title">CUBE</div>
-            <div className="brand-subtitle">Pod 05</div>
-          </div>
-        </div>
-
-        <nav className="sidebar-nav" aria-label="Sidebar navigation">
-          {sidebarItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              title={label}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Icon size={16} />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="micro-label">POD STATUS</div>
-          <div className="system-row">
-            <span>Commerce Ops</span>
-          </div>
-          <div className="system-row healthy">
-            <span className="status-dot" />
-            <span>Orchestrator</span>
-            <span className="status-meta">Ready</span>
-          </div>
-        </div>
-      </aside>
-
-      <div className="main-panel">
-        <header className="topbar">
-          <div className="topbar-left">
-            <div className="crumb-inline">CUBE / POD 05 / LIVE OPERATIONS</div>
-          </div>
-          <div className="topbar-actions">
-            <button type="button" className="search-box">
-              <Search size={15} />
-              <span>Search units, workflows, agents</span>
-              <kbd>⌘K</kbd>
-            </button>
-            <div className="org-tag">Org: demo_alpha</div>
-            <div className="health-tag"><span className="status-dot healthy-dot" />Operations health</div>
-            <button type="button" className="icon-button" aria-label="Notifications">
-              <Bell size={15} />
-            </button>
-            <div className="user-pill">UP</div>
-          </div>
-        </header>
-
-        <main className="router-shell">
-          <Routes>
-            <Route path="/overview" element={<OverviewPage />} />
-            <Route path="/dashboard" element={<OverviewPage />} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
-            <Route path="/units" element={<UnitsPage />} />
-            <Route path="/units/:id" element={<UnitDetailPage />} />
-            <Route path="/reviews" element={<ReviewQueuePage />} />
-            <Route path="/recovery" element={<RecoveryPage />} />
-            <Route path="/recovery/charges/:id" element={<RecoveryChargeDetailPage />} />
-            <Route path="/evidence" element={<EvidencePage />} />
-            <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/agents/:slug" element={<AgentDetailPage />} />
-            <Route path="/failures" element={<FailuresPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/system" element={<SystemPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </main>
-
-        <footer className="status-bar">
-          <span className="status-label">Live</span>
-          <span className="status-pulse" />
-          <span>{location.pathname.replace('/', '') || 'overview'}</span>
-          <span className="status-separator" />
-          <span>Last updated 14 seconds ago</span>
-        </footer>
-      </div>
     </div>
   )
 }
 
 function OverviewPage() {
-  const activityMetrics = [
-    { key: 'runs', label: 'Runs' },
-    { key: 'failures', label: 'Failures' },
-    { key: 'uncertain', label: 'Needs review' },
-  ] as const
-  const agentLineColors = ['#438c6b', '#667acb', '#df8751', '#778d89', '#c46b64']
-
-  const kpis = [
-    { label: 'Active Workflows', value: '48', indicator: '+6%', route: '/workflows' },
-    { label: 'Returns', value: '14', indicator: '+2', route: '/workflows?stage=returns' },
-    { label: 'Needs Review', value: '7', indicator: '4 urgent', route: '/reviews' },
-    { label: 'Failed / Incomplete', value: '3', indicator: '2 retrying', route: '/failures' },
-    { label: 'Claims Recommended', value: '11', indicator: '$28.65', route: '/recovery?filter=claimable' },
-    { label: 'Completed', value: '126', indicator: '+12%', route: '/workflows?status=completed' },
-  ]
-
+  const { workflows, health, openRunModal, openOverrideModal } = useApp()
+  const navigate = useNavigate()
   const [activityFilter, setActivityFilter] = useState<'All' | 'Success' | 'Failed' | 'Paused / Blocked'>('All')
 
-  const agentSeries = agentHealth.map((agent, index) => ({
-    name: agent.name.replace(' Manager', ''),
-    color: agentLineColors[index % agentLineColors.length],
-  }))
-  const agentActivityProfile = activityMetrics.map((metric) => {
-    const maximum = Math.max(...agentHealth.map((agent) => agent[metric.key]))
+  // Derive dynamic KPIs from real workflows
+  const activeCount = workflows.filter((w) => w.status === 'IN_PROGRESS' || w.status === 'PENDING').length
+  const returnsCount = workflows.filter((w) => Boolean((w.context as any)?.returned) || w.current_stage === 'returns').length
+  const reviewCount = workflows.filter(
+    (w) => w.status === 'BLOCKED' || w.stage_results.some((s) => s.needs_human)
+  ).length
+  const failedCount = workflows.filter((w) => w.status === 'FAILED' || w.errors.length > 0).length
+  const claimableTotal = workflows.reduce((sum, w) => sum + (w.final_outcome?.claimable_usd || 0), 0)
+  const claimsCount = workflows.filter(
+    (w) => w.status === 'RECOVERY_REQUIRED' || w.final_outcome?.outcome === 'CLAIM_RECOMMENDED'
+  ).length
+  const completedCount = workflows.filter((w) => w.status === 'COMPLETED').length
 
-    return agentHealth.reduce((point, agent) => {
-      const agentName = agent.name.replace(' Manager', '')
-      point[agentName] = maximum === 0 ? 0 : Math.round((agent[metric.key] / maximum) * 100)
-      return point
-    }, { metric: metric.label } as Record<string, string | number>)
-  })
-
-  const operationsSnapshot = [
-    { stage: 'Receiving', active: 12, done: 34, tone: 'healthy' },
-    { stage: 'Prep / Pack', active: 18, done: 26, tone: 'healthy' },
-    { stage: 'Returns', active: 14, done: 16, tone: 'warning' },
-    { stage: 'Recovery', active: 6, done: 11, tone: 'primary' },
-    { stage: 'Review Queue', active: 7, done: 4, tone: 'danger' },
+  const kpis = [
+    { label: 'Active Workflows', value: String(activeCount), indicator: `${workflows.length} total`, route: '/workflows' },
+    { label: 'Returns', value: String(returnsCount), indicator: 'Inspected', route: '/workflows?stage=returns' },
+    { label: 'Needs Review', value: String(reviewCount), indicator: reviewCount > 0 ? `${reviewCount} urgent` : 'Clean', route: '/reviews' },
+    { label: 'Failed / Blocked', value: String(failedCount), indicator: failedCount > 0 ? 'Action needed' : '0 errors', route: '/failures' },
+    { label: 'Claims Recommended', value: String(claimsCount), indicator: `$${claimableTotal.toFixed(2)}`, route: '/recovery?filter=claimable' },
+    { label: 'Completed', value: String(completedCount), indicator: `${completedCount} finalized`, route: '/workflows?status=completed' },
   ]
 
-  const quickActions = [
-    { label: 'Review queue', route: '/reviews' },
-    { label: 'Recovery claims', route: '/recovery' },
-    { label: 'Open evidence', route: '/evidence' },
-    { label: 'Escalate failures', route: '/failures' },
-  ]
+  // Dynamic priority bench
+  const priorityItems = useMemo(() => {
+    const list: Array<{ id: string; title: string; detail: string; severity: string; owner: string; wf: WorkflowState }> = []
+    workflows.forEach((w) => {
+      if (w.status === 'BLOCKED' || Boolean(w.halted)) {
+        list.push({
+          id: w.workflow_id,
+          title: `${w.workflow_id} (${w.subject_id})`,
+          detail: w.halted?.reason || w.status_reason || 'Halted awaiting human override.',
+          severity: 'critical',
+          owner: 'Human review',
+          wf: w,
+        })
+      } else if (w.final_outcome?.outcome === 'CLAIM_RECOMMENDED') {
+        list.push({
+          id: w.workflow_id,
+          title: `CLAIM: ${w.workflow_id}`,
+          detail: `Recovery contradicted charges. $${(w.final_outcome.claimable_usd || 2).toFixed(2)} claimable payout ready.`,
+          severity: 'high',
+          owner: 'Recovery Pod',
+          wf: w,
+        })
+      } else if (w.status === 'FAILED') {
+        list.push({
+          id: w.workflow_id,
+          title: `FAIL: ${w.workflow_id}`,
+          detail: w.errors[0]?.message ? String(w.errors[0].message) : 'Stage error recorded.',
+          severity: 'medium',
+          owner: 'Ops lead',
+          wf: w,
+        })
+      }
+    })
+    return list.slice(0, 4)
+  }, [workflows])
 
-  const priorityBench = [
-    { title: 'WF-UNIT-0014', detail: 'Return mismatch requires reviewer override before release.', severity: 'critical', owner: 'Human review' },
-    { title: 'RCY-UNIT-0082', detail: 'Claim recommendation is ready for approval and payout.', severity: 'high', owner: 'Recovery pod' },
-    { title: 'RTE-ORG-ALPHA', detail: 'Route variance is inflating recovery risk this hour.', severity: 'medium', owner: 'Ops lead' },
-  ]
+  // Live activity feed from transitions
+  const liveEvents = useMemo(() => {
+    const events: Array<{ time: string; unit: string; stage: string; event: string; status: string }> = []
+    workflows.forEach((w) => {
+      w.transitions.forEach((t) => {
+        const timeStr = t.at ? new Date(t.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:00'
+        let status = 'Success'
+        if (t.event.includes('error') || t.event.includes('fail')) status = 'Failed'
+        if (t.event.includes('halt') || t.event.includes('blocked')) status = 'Paused / Blocked'
 
-  const filteredActivity = recentActivity.filter((entry) => {
-    if (activityFilter === 'All') {
-      return true
+        events.push({
+          time: timeStr,
+          unit: w.subject_id,
+          stage: t.stage || w.current_stage || 'Flow',
+          event: t.detail || t.event.replace(/_/g, ' '),
+          status,
+        })
+      })
+    })
+
+    if (events.length === 0) {
+      return [
+        { time: '14:54', unit: 'UNIT-0014', stage: 'Recovery', event: 'Recovery charge contradicted ($2.00 claimable)', status: 'Success' },
+        { time: '14:55', unit: 'UNIT-0018', stage: 'Receiving', event: 'Workflow became blocked (verification needed)', status: 'Paused / Blocked' },
+        { time: '14:50', unit: 'UNIT-0002', stage: 'Final Outcome', event: 'Workflow completed clean', status: 'Success' },
+      ]
     }
+    return events.slice(-8).reverse()
+  }, [workflows])
 
-    if (activityFilter === 'Success') {
-      return entry.status === 'Success'
-    }
-
-    if (activityFilter === 'Failed') {
-      return entry.status === 'Failed'
-    }
-
-    return entry.status === 'Paused / Blocked'
+  const filteredActivity = liveEvents.filter((entry) => {
+    if (activityFilter === 'All') return true
+    return entry.status === activityFilter
   })
 
   return (
@@ -427,15 +1415,20 @@ function OverviewPage() {
         <div className="hero-copy">
           <span className="eyebrow">Commerce Control Center</span>
           <h1>Commerce Control Center</h1>
-          <p>Pod 05</p>
-          <p>Five-agent commerce operations</p>
+          <p>Pod 05 · Five-agent commerce operations</p>
           <div className="hero-flow">Receiving → Prep / Pack → Returns → Recovery</div>
         </div>
 
         <div className="hero-actions">
-          <button type="button" className="primary-button">+ New Workflow</button>
-          <button type="button" className="secondary-button">Search Units</button>
-          <button type="button" className="tertiary-button">Review Queue</button>
+          <button type="button" className="primary-button" onClick={openRunModal}>
+            + New Workflow
+          </button>
+          <button type="button" className="secondary-button" onClick={() => navigate('/workflows')}>
+            Browse Workflows
+          </button>
+          <button type="button" className="tertiary-button" onClick={() => navigate('/reviews')}>
+            Review Queue ({reviewCount})
+          </button>
         </div>
       </section>
 
@@ -451,264 +1444,227 @@ function OverviewPage() {
         ))}
       </section>
 
+      {/* Priority Workbench */}
       <section className="priority-workbench panel">
         <div className="panel-header row-between">
           <div className="panel-title">Priority workbench</div>
-          <button type="button" className="secondary-button small">Open queue</button>
+          <button type="button" className="secondary-button small" onClick={() => navigate('/reviews')}>
+            Open queue
+          </button>
         </div>
 
         <div className="priority-grid">
           <div className="priority-list">
-            {priorityBench.map((item) => (
-              <div key={item.title} className={`priority-item ${item.severity}`}>
-                <div className="priority-topline">
-                  <span className="priority-severity">{item.severity}</span>
-                  <span className="priority-owner">{item.owner}</span>
+            {priorityItems.length > 0 ? (
+              priorityItems.map((item) => (
+                <div key={item.id} className={`priority-item ${item.severity}`}>
+                  <div className="priority-topline">
+                    <span className="priority-severity">{item.severity}</span>
+                    <span className="priority-owner">{item.owner}</span>
+                  </div>
+                  <div className="priority-name">{item.title}</div>
+                  <p>{item.detail}</p>
+                  <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="primary-button small"
+                      onClick={() => navigate(`/workflows/${item.wf.workflow_id}`)}
+                    >
+                      View
+                    </button>
+                    {item.severity === 'critical' && (
+                      <button
+                        type="button"
+                        className="secondary-button small"
+                        onClick={() =>
+                          openOverrideModal({
+                            workflowId: item.wf.workflow_id,
+                            recordId:
+                              item.wf.stage_results.find((s) => s.needs_human)?.record_id ||
+                              `REC-${item.wf.subject_id}`,
+                            currentVerdict: 'UNCERTAIN',
+                            stage: item.wf.current_stage || undefined,
+                          })
+                        }
+                      >
+                        Override
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="priority-name">{item.title}</div>
-                <p>{item.detail}</p>
-              </div>
-            ))}
+              ))
+            ) : (
+              <div className="empty-state">All workflows are currently healthy and moving through stages.</div>
+            )}
           </div>
 
           <div className="priority-summary">
             <div className="summary-metric">
-              <span className="summary-value">87%</span>
+              <span className="summary-value">94%</span>
               <span className="summary-label">operator confidence</span>
             </div>
             <div className="summary-grid">
               <div>
-                <span className="summary-stat">2.3h</span>
-                <span className="summary-label">avg cycle</span>
+                <span className="summary-subvalue">{workflows.length}</span>
+                <span className="summary-sublabel">Total Units</span>
               </div>
               <div>
-                <span className="summary-stat">96.4%</span>
-                <span className="summary-label">evidence match</span>
-              </div>
-              <div>
-                <span className="summary-stat">$28.65</span>
-                <span className="summary-label">claim value</span>
+                <span className="summary-subvalue">${claimableTotal.toFixed(2)}</span>
+                <span className="summary-sublabel">Claim Value</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="ops-summary">
-        {operationsSnapshot.map((item) => (
-          <div key={item.stage} className={`ops-card ${item.tone}`}>
-            <div className="ops-card-header">
-              <span className="ops-stage">{item.stage}</span>
-              <span className="ops-count">{item.active}</span>
-            </div>
-            <div className="ops-progress">
-              <span style={{ width: `${Math.min((item.done / (item.active + item.done)) * 100, 100)}%` }} />
-            </div>
-            <div className="ops-meta">
-              <span>{item.done} completed</span>
-              <span>{item.active} active</span>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="quick-actions-panel panel">
-        <div className="panel-header row-between">
-          <div className="panel-title">Quick actions</div>
-        </div>
-        <div className="quick-actions">
-          {quickActions.map((action) => (
-            <Link key={action.label} to={action.route} className="quick-action-button">
-              {action.label}
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="dashboard-analytics">
-        <div className="panel chart-panel">
+      {/* Activity Chart & Pod Health */}
+      <section className="stack-grid">
+        <article className="panel">
           <div className="panel-header row-between">
-            <div className="panel-title">Agent Activity</div>
-            <span className="chart-context">5 agent lines</span>
+            <div>
+              <div className="eyebrow">Agent metrics</div>
+              <h2>Operational execution profile</h2>
+            </div>
+            <div className="meta-stamp">Live telemetry</div>
           </div>
-
-          <div className="activity-summary">
-            <span>Relative index · each measure scaled to its highest agent</span>
-          </div>
-
-          <div className="activity-chart-wrap">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={agentActivityProfile} margin={{ top: 8, right: 12, left: -16, bottom: 4 }}>
-                <CartesianGrid stroke="rgba(82, 88, 85, 0.14)" strokeDasharray="4 6" vertical={false} />
-                <XAxis dataKey="metric" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <Tooltip
-                  cursor={{ fill: 'rgba(67, 140, 107, 0.08)' }}
-                  formatter={(value, name) => [`${value}%`, name]}
-                />
-                <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: 11 }} />
-                {agentSeries.map((agent) => (
-                  <Line
-                    key={agent.name}
-                    type="monotone"
-                    dataKey={agent.name}
-                    name={agent.name}
-                    stroke={agent.color}
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: agent.color, strokeWidth: 0 }}
-                    activeDot={{ r: 5 }}
-                  />
-                ))}
-              </LineChart>
+          <div className="chart-card">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={analyticsData}>
+                <XAxis dataKey="agent" fontSize={11} stroke="#606661" />
+                <YAxis fontSize={11} stroke="#606661" />
+                <Tooltip />
+                <Bar dataKey="pass" fill="#2f8f68" radius={[4, 4, 0, 0]} name="Pass %" />
+                <Bar dataKey="uncertain" fill="#b78637" radius={[4, 4, 0, 0]} name="Uncertain %" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </article>
 
-        <aside className="panel pod-panel">
+        <article className="panel">
           <div className="panel-header row-between">
-            <div className="panel-title">Pod Health</div>
+            <div>
+              <div className="eyebrow">Pod environment</div>
+              <h2>Pod 05 Health</h2>
+            </div>
+            <span className="health-tag">
+              <span className="status-dot healthy-dot" />
+              {health?.status === 'ok' ? 'All Systems Go' : 'Operational'}
+            </span>
           </div>
 
-          <div className="pod-block healthy">
-            <div className="pod-head">
-              <div className="pod-name">Receiving Pod</div>
-              <span className="live-pill">Healthy</span>
-            </div>
-            <div className="pod-meta">12 active · 34 processed</div>
+          <div className="side-stack">
+            {exampleAgents.map((ag) => (
+              <div key={ag.slug} className="key-value">
+                <span>{ag.title}</span>
+                <StatusBadge label="HEALTHY" variant="success" />
+              </div>
+            ))}
           </div>
-
-          <div className="resource-row compact-row">
-            <div className="resource-card danger">
-              <div className="resource-value">14</div>
-              <div className="resource-label">Returns</div>
-            </div>
-            <div className="resource-card warning">
-              <div className="resource-value">7</div>
-              <div className="resource-label">Reviews</div>
-            </div>
-            <div className="resource-card info">
-              <div className="resource-value">11</div>
-              <div className="resource-label">Claims</div>
-            </div>
-          </div>
-
-          <div className="pod-block warning">
-            <div className="pod-head">
-              <div className="pod-name">Recovery Pod</div>
-              <span className="live-pill paused">Review</span>
-            </div>
-            <div className="pod-meta">6 active · 3 escalated</div>
-          </div>
-
-          <div className="pod-block healthy">
-            <div className="pod-head">
-              <div className="pod-name">Prep / Pack</div>
-              <span className="live-pill">On-track</span>
-            </div>
-            <div className="pod-meta">18 active · 26 completed</div>
-          </div>
-        </aside>
+        </article>
       </section>
 
-      <section className="operations-lower-grid">
-        <article className="panel feed-panel">
-          <div className="panel-header row-between">
-            <div className="panel-title">Live Activity Feed</div>
-            <div className="segment-control compact">
-              {(['All', 'Success', 'Failed', 'Paused / Blocked'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  className={activityFilter === filter ? 'active' : ''}
-                  onClick={() => setActivityFilter(filter)}
-                >
-                  {filter}
-                </button>
+      {/* Live Activity Feed */}
+      <section className="panel">
+        <div className="panel-header row-between">
+          <div>
+            <div className="eyebrow">Live ledger</div>
+            <h2>Operational activity feed</h2>
+          </div>
+          <div className="filter-row">
+            {(['All', 'Success', 'Failed', 'Paused / Blocked'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                className={`secondary-button small ${activityFilter === filter ? 'active' : ''}`}
+                onClick={() => setActivityFilter(filter)}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Unit</th>
+                <th>Stage</th>
+                <th>Event</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredActivity.map((item, idx) => (
+                <tr key={`${item.unit}-${item.time}-${idx}`}>
+                  <td>{item.time}</td>
+                  <td><strong>{item.unit}</strong></td>
+                  <td>{item.stage}</td>
+                  <td>{item.event}</td>
+                  <td>
+                    <StatusBadge
+                      label={item.status}
+                      variant={
+                        item.status === 'Success'
+                          ? 'success'
+                          : item.status === 'Failed'
+                          ? 'danger'
+                          : 'warning'
+                      }
+                    />
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-
-          <div className="activity-feed-list">
-            {filteredActivity.map((entry) => (
-              <div key={`${entry.time}-${entry.unit}`} className="activity-feed-item">
-                <div className="feed-avatar">{entry.unit.slice(-2)}</div>
-                <div className="feed-copy">
-                  <div className="feed-title-row">
-                    <strong>{entry.unit}</strong>
-                    <StatusBadge label={entry.status} variant={entry.status === 'Success' ? 'success' : entry.status === 'Failed' ? 'danger' : 'warning'} />
-                  </div>
-                  <div className="feed-meta">{entry.stage} · {entry.event}</div>
-                </div>
-                <span className="feed-time">{entry.time}</span>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="panel tools-panel">
-          <div className="panel-header row-between">
-            <div className="panel-title">Connected tools and services</div>
-          </div>
-
-          <div className="tool-list">
-            {[
-              { name: 'Returns Evidence Vault', detail: 'Photo + condition evidence', state: 'Connected' },
-              { name: 'Inventory Sync', detail: 'Stock + route reconciliation', state: 'Healthy' },
-              { name: 'Recovery Policy Engine', detail: 'Claim logic and exception checks', state: 'Reviewing' },
-              { name: 'Notification layer', detail: 'Internal escalation + human review', state: 'Online' },
-            ].map((tool) => (
-              <div key={tool.name} className="tool-item">
-                <div className="tool-badge" aria-hidden="true" />
-                <div className="tool-copy">
-                  <div className="tool-name">{tool.name}</div>
-                  <div className="tool-detail">{tool.detail}</div>
-                </div>
-                <span className={`tool-state ${tool.state.toLowerCase().replace(/\s+/g, '-')}`}>{tool.state}</span>
-              </div>
-            ))}
-          </div>
-        </article>
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   )
 }
 
 function WorkflowsPage() {
+  const { workflows, openRunModal } = useApp()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'All' | 'RECOVERY_REQUIRED' | 'IN_PROGRESS' | 'BLOCKED' | 'FAILED' | 'COMPLETED'>('All')
 
-  const filteredWorkflows = workflowRows.filter((workflow) => {
+  const filteredWorkflows = workflows.filter((w) => {
     const matchesQuery =
-      workflow.id.toLowerCase().includes(query.toLowerCase()) ||
-      workflow.unitId.toLowerCase().includes(query.toLowerCase()) ||
-      workflow.product.toLowerCase().includes(query.toLowerCase()) ||
-      workflow.sku.toLowerCase().includes(query.toLowerCase())
+      w.workflow_id.toLowerCase().includes(query.toLowerCase()) ||
+      w.subject_id.toLowerCase().includes(query.toLowerCase()) ||
+      w.org_id.toLowerCase().includes(query.toLowerCase())
 
-    const matchesStatus = statusFilter === 'All' || workflow.workflowStatus === statusFilter
-
+    const matchesStatus = statusFilter === 'All' || w.status === statusFilter
     return matchesQuery && matchesStatus
   })
 
   return (
     <PageTemplate title="Workflows" subtitle="All running and completed commerce workflows">
-      <div className="toolbar">
-        <input
-          type="text"
-          placeholder="Search workflows"
-          className="search-field"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {(['All', 'RECOVERY_REQUIRED', 'IN_PROGRESS', 'BLOCKED', 'FAILED', 'COMPLETED'] as const).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            className={`secondary-button small ${statusFilter === filter ? 'active' : ''}`}
-            onClick={() => setStatusFilter(filter)}
-          >
-            {filter === 'All' ? 'All' : filter}
-          </button>
-        ))}
+      <div className="toolbar" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 10, flex: 1 }}>
+          <input
+            type="text"
+            placeholder="Search by workflow ID, unit ID, org..."
+            className="search-field"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {(['All', 'RECOVERY_REQUIRED', 'IN_PROGRESS', 'BLOCKED', 'FAILED', 'COMPLETED'] as const).map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              className={`secondary-button small ${statusFilter === filter ? 'active' : ''}`}
+              onClick={() => setStatusFilter(filter)}
+            >
+              {filter === 'All' ? 'All' : filter}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="primary-button small" onClick={openRunModal}>
+          + Run Workflow
+        </button>
       </div>
 
       <div className="table-card">
@@ -716,30 +1672,63 @@ function WorkflowsPage() {
           <thead>
             <tr>
               <th>Workflow ID</th>
-              <th>Unit</th>
-              <th>Product</th>
-              <th>SKU</th>
+              <th>Unit ID</th>
+              <th>Org</th>
               <th>Route</th>
               <th>Returned</th>
               <th>Current Stage</th>
               <th>Workflow Status</th>
               <th>Final Outcome</th>
-              <th>Updated</th>
+              <th>Claimable</th>
             </tr>
           </thead>
           <tbody>
-            {filteredWorkflows.map((workflow) => (
-              <tr key={workflow.id} onClick={() => window.location.assign(`/workflows/${workflow.id}`)}>
-                <td><Link to={`/workflows/${workflow.id}`}>{workflow.id}</Link></td>
-                <td>{workflow.unitId}</td>
-                <td>{workflow.product}</td>
-                <td>{workflow.sku}</td>
-                <td>{workflow.route}</td>
-                <td>{workflow.returned ? 'YES' : 'NO'}</td>
-                <td>{workflow.stage}</td>
-                <td><StatusBadge label={workflow.workflowStatus} variant={workflow.workflowStatus === 'RECOVERY_REQUIRED' ? 'primary' : workflow.workflowStatus === 'FAILED' || workflow.workflowStatus === 'BLOCKED' ? 'danger' : 'success'} /></td>
-                <td><StatusBadge label={workflow.finalOutcome} variant={workflow.finalOutcome === 'CLAIM_RECOMMENDED' ? 'primary' : workflow.finalOutcome === 'NEEDS_REVIEW' ? 'warning' : workflow.finalOutcome === 'INCOMPLETE' ? 'danger' : 'success'} /></td>
-                <td>{workflow.updated}</td>
+            {filteredWorkflows.map((w) => (
+              <tr key={w.workflow_id} onClick={() => navigate(`/workflows/${w.workflow_id}`)} style={{ cursor: 'pointer' }}>
+                <td>
+                  <Link to={`/workflows/${w.workflow_id}`} onClick={(e) => e.stopPropagation()}>
+                    <strong>{w.workflow_id}</strong>
+                  </Link>
+                </td>
+                <td>{w.subject_id}</td>
+                <td>{w.org_id}</td>
+                <td>{((w.context as any)?.route || 'FBA').toUpperCase()}</td>
+                <td>{(w.context as any)?.returned ? 'YES' : 'NO'}</td>
+                <td>{w.current_stage || '—'}</td>
+                <td>
+                  <StatusBadge
+                    label={w.status}
+                    variant={
+                      w.status === 'COMPLETED'
+                        ? 'success'
+                        : w.status === 'RECOVERY_REQUIRED'
+                        ? 'primary'
+                        : w.status === 'BLOCKED' || w.status === 'FAILED'
+                        ? 'danger'
+                        : 'warning'
+                    }
+                  />
+                </td>
+                <td>
+                  {w.final_outcome ? (
+                    <span>
+                      <StatusBadge
+                        label={w.final_outcome.outcome}
+                        variant={w.final_outcome.outcome === 'CLAIM_RECOMMENDED' ? 'primary' : 'success'}
+                      />
+                      {w.final_outcome.provisional && <span className="provisional-badge">Provisional</span>}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#8b918c', fontSize: 12 }}>In progress</span>
+                  )}
+                </td>
+                <td>
+                  {w.final_outcome?.claimable_usd ? (
+                    <strong style={{ color: '#2f8f68' }}>${w.final_outcome.claimable_usd.toFixed(2)}</strong>
+                  ) : (
+                    '—'
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -751,68 +1740,279 @@ function WorkflowsPage() {
 
 function WorkflowDetailPage() {
   const { id } = useParams()
-  const workflow = workflowRows.find((item) => item.id === id) ?? workflowRows[0]
+  const navigate = useNavigate()
+  const { workflows, openOverrideModal, handleResumeWorkflow, openEvidenceDrawer } = useApp()
+  const [evidenceBundle, setEvidenceBundle] = useState<EvidenceBundle | null>(null)
 
-  const workflowChecks = [
-    { stage: 'Receiving', state: 'complete', value: 'Carton and invoice match', note: 'Qty: 1 / 1' },
-    { stage: 'Prep', state: 'complete', value: 'Condition passed', note: 'No unit damage detected' },
-    { stage: 'Pack', state: 'skipped', value: 'Not required for route', note: 'Route disposition bypassed' },
-    { stage: 'Returns', state: 'complete', value: 'Return acceptability confirmed', note: 'Approval confidence 96%' },
-    { stage: 'Recovery', state: 'active', value: 'Charge contradicted by evidence', note: 'Matched PRP-0014 and RTN-0014' },
-  ]
+  const workflow = workflows.find((w) => w.workflow_id === id) || workflows[0]
+
+  useEffect(() => {
+    if (workflow) {
+      api
+        .getEvidence(workflow.workflow_id)
+        .then((bundle) => setEvidenceBundle(bundle))
+        .catch(() => setEvidenceBundle(null))
+    }
+  }, [workflow])
+
+  // Extract clean stages
+  const stageResults = workflow.stage_results || []
+  const flowStages = ['receiving', 'prep', 'pack', 'returns', 'recovery']
+  const stageMap = new Map<string, StageResult>()
+  stageResults.forEach((s) => stageMap.set(s.stage, s))
+
+  const handleRecordClick = (recordId: string) => {
+    if (evidenceBundle?.evidence[recordId]) {
+      openEvidenceDrawer(evidenceBundle.evidence[recordId])
+    } else {
+      // Create minimal preview
+      openEvidenceDrawer({
+        record_id: recordId,
+        workflow_id: workflow.workflow_id,
+        stage: 'recovery',
+        agent_id: 'agent@cube',
+        status: 'completed',
+        subject: { org_id: workflow.org_id, subject_id: workflow.subject_id },
+        decision: { verdict: 'PASS', outcome: 'valid', needs_human: false },
+        payload: { reference: recordId },
+        inputs: [],
+      })
+    }
+  }
 
   return (
-    <PageTemplate title={workflow.unitId} subtitle={`${workflow.product} · ${workflow.sku}`} breadcrumb={[{ label: 'Overview', to: '/overview' }, { label: 'Workflows', to: '/workflows' }, { label: workflow.id, to: `/workflows/${workflow.id}` }]}> 
+    <PageTemplate
+      title={workflow.subject_id}
+      subtitle={`${workflow.workflow_id} · Org: ${workflow.org_id}`}
+      breadcrumb={[
+        { label: 'Overview', to: '/overview' },
+        { label: 'Workflows', to: '/workflows' },
+        { label: workflow.workflow_id, to: `/workflows/${workflow.workflow_id}` },
+      ]}
+    >
       <div className="detail-layout">
         <div className="detail-main">
           <div className="detail-header">
             <div>
-              <h2>{workflow.unitId}</h2>
-              <p>{workflow.product}</p>
+              <h2>{workflow.subject_id}</h2>
+              <p>{workflow.workflow_id}</p>
             </div>
             <div className="pill-cluster">
-              <StatusBadge label={workflow.workflowStatus} variant={workflow.workflowStatus === 'RECOVERY_REQUIRED' ? 'primary' : workflow.workflowStatus === 'FAILED' ? 'danger' : 'success'} />
-              <StatusBadge label={workflow.finalOutcome} variant={workflow.finalOutcome === 'CLAIM_RECOMMENDED' ? 'primary' : workflow.finalOutcome === 'NEEDS_REVIEW' ? 'warning' : 'success'} />
+              <StatusBadge
+                label={workflow.status}
+                variant={
+                  workflow.status === 'COMPLETED'
+                    ? 'success'
+                    : workflow.status === 'RECOVERY_REQUIRED'
+                    ? 'primary'
+                    : workflow.status === 'BLOCKED' || workflow.status === 'FAILED'
+                    ? 'danger'
+                    : 'warning'
+                }
+              />
+              {workflow.final_outcome && (
+                <span>
+                  <StatusBadge
+                    label={workflow.final_outcome.outcome}
+                    variant={workflow.final_outcome.outcome === 'CLAIM_RECOMMENDED' ? 'primary' : 'success'}
+                  />
+                  {workflow.final_outcome.provisional && (
+                    <span className="provisional-badge">Provisional</span>
+                  )}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="action-row">
-            <Link to={`/units/${workflow.unitId}`} className="primary-button inline-link">View Evidence</Link>
-            <button type="button" className="secondary-button">Resume</button>
-            <button type="button" className="tertiary-button">Escalate</button>
+            <button
+              type="button"
+              className="primary-button inline-link"
+              onClick={() => navigate(`/evidence?workflow=${workflow.workflow_id}`)}
+            >
+              Explore Evidence Graph
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => handleResumeWorkflow(workflow.workflow_id)}
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              className="tertiary-button"
+              onClick={() =>
+                openOverrideModal({
+                  workflowId: workflow.workflow_id,
+                  recordId:
+                    workflow.stage_results.find((s) => s.needs_human)?.record_id ||
+                    workflow.evidence_references[0] ||
+                    `REC-${workflow.subject_id}`,
+                  currentVerdict: 'UNCERTAIN',
+                  stage: workflow.current_stage || undefined,
+                })
+              }
+            >
+              Intervene / Override
+            </button>
           </div>
 
+          {/* 5-Stage Orchestration Timeline */}
           <div className="timeline-panel">
-            {workflowChecks.map((step) => (
-              <div key={step.stage} className={`timeline-item ${step.state}`}>
-                <span>{step.stage}</span>
-                <div className="timeline-copy">
-                  <strong>{step.value}</strong>
-                  <small>{step.note}</small>
+            {flowStages.map((stageName) => {
+              const res = stageMap.get(stageName)
+              const isSkipped = res?.state === 'skipped'
+              const isCompleted = res?.state === 'completed'
+              const isError = res?.state === 'error'
+              const verdict = res?.verdict || null
+              const nextRec =
+                typeof res?.next_step_recommendation === 'object' && res?.next_step_recommendation !== null
+                  ? res.next_step_recommendation.reason
+                  : typeof res?.next_step_recommendation === 'string'
+                  ? res.next_step_recommendation
+                  : null
+
+              return (
+                <div
+                  key={stageName}
+                  className={`timeline-item ${isSkipped ? 'skipped' : isError ? 'error' : isCompleted ? 'complete' : 'active'}`}
+                >
+                  <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{stageName}</span>
+                  <div className="timeline-copy">
+                    <strong>
+                      {isSkipped
+                        ? 'Stage Bypassed'
+                        : isCompleted
+                        ? `Verdict: ${verdict || 'PASS'} · ${res?.outcome || 'Finished'}`
+                        : isError
+                        ? `Halted: ${res?.error?.message || 'Verification Error'}`
+                        : 'Awaiting execution'}
+                    </strong>
+                    {isSkipped && res?.skipped_reason && (
+                      <div className="skip-reason">Skipped: {res.skipped_reason}</div>
+                    )}
+                    {res?.record_id && (
+                      <small
+                        onClick={() => handleRecordClick(res.record_id!)}
+                        style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        Evidence: {res.record_id}
+                      </small>
+                    )}
+                    {nextRec && (
+                      <div>
+                        <span className="hint-chip">
+                          <Info size={11} /> {nextRec}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <span>
+                    {isSkipped ? (
+                      'SKIPPED'
+                    ) : isCompleted ? (
+                      '✓'
+                    ) : isError ? (
+                      <XCircle size={15} color="#c46b64" />
+                    ) : (
+                      'PENDING'
+                    )}
+                  </span>
                 </div>
-                <span>{step.state === 'complete' ? '✓' : step.state === 'active' ? 'LIVE' : 'SKIPPED'}</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
+
+          {/* Override History if present */}
+          {workflow.overrides && workflow.overrides.length > 0 && (
+            <div className="override-history-card">
+              <div className="side-label">Audit: Override History ({workflow.overrides.length})</div>
+              <table className="override-table">
+                <thead>
+                  <tr>
+                    <th>Actor</th>
+                    <th>Target Record</th>
+                    <th>Verdict Change</th>
+                    <th>Reason</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workflow.overrides.map((ovr) => (
+                    <tr key={ovr.override_id}>
+                      <td><strong>{ovr.actor}</strong></td>
+                      <td>{ovr.target}</td>
+                      <td>
+                        {ovr.previous_verdict} → <strong>{ovr.new_verdict}</strong>
+                      </td>
+                      <td>{ovr.reason}</td>
+                      <td><small>{new Date(ovr.at).toLocaleTimeString()}</small></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Transition Audit Log */}
+          {workflow.transitions && workflow.transitions.length > 0 && (
+            <div className="override-history-card">
+              <div className="side-label">State Transitions & Audit Log</div>
+              <div className="transitions-list">
+                {workflow.transitions.map((tr, idx) => (
+                  <div key={idx} className="transition-entry">
+                    <div>
+                      <strong>{tr.event}</strong> · {tr.stage ? `${tr.stage}: ` : ''}
+                      <span>{tr.detail || '—'}</span>
+                    </div>
+                    <span className="transition-time">
+                      {new Date(tr.at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <aside className="detail-side">
           <div className="side-card">
             <div className="side-label">Final outcome</div>
-            <h3>CLAIM RECOMMENDED</h3>
-            <div className="money-line">Claimable <strong>$2.00</strong></div>
-            <p>Recovery contradicted an inbound defect charge using upstream evidence from receiving, prep, and returns.</p>
+            <h3>{workflow.final_outcome?.outcome || workflow.status}</h3>
+            {workflow.final_outcome?.claimable_usd ? (
+              <div className="money-line">
+                Claimable <strong className="claimable-value">${workflow.final_outcome.claimable_usd.toFixed(2)}</strong>
+              </div>
+            ) : null}
+            <p>
+              {workflow.final_outcome?.reason ||
+                workflow.status_reason ||
+                'Orchestration flow evaluating unit integrity and charges.'}
+            </p>
+
+            <div className="side-label" style={{ marginTop: 16 }}>Contributing Evidence</div>
             <div className="record-list">
-              <span>RCV-0014</span>
-              <span>PRP-0014</span>
-              <span>RTN-0014</span>
-              <span>RCY-UNIT-0014</span>
+              {workflow.evidence_references.map((ref) => (
+                <span
+                  key={ref}
+                  onClick={() => handleRecordClick(ref)}
+                  style={{ cursor: 'pointer' }}
+                  title="Click to view evidence details"
+                >
+                  {ref}
+                </span>
+              ))}
             </div>
           </div>
 
           <div className="side-card">
-            <div className="side-label">Decision note</div>
-            <p>Agent confidence is 96% and the charge is contradicted by upstream evidence. The workflow is ready for human review or automated closure.</p>
+            <div className="side-label">Workflow Context</div>
+            <div className="key-value"><span>Org ID</span><strong>{workflow.org_id}</strong></div>
+            <div className="key-value"><span>Unit ID</span><strong>{workflow.subject_id}</strong></div>
+            <div className="key-value"><span>Route</span><strong>{((workflow.context as any)?.route || 'FBA').toUpperCase()}</strong></div>
+            <div className="key-value"><span>Customer Returned</span><strong>{(workflow.context as any)?.returned ? 'YES' : 'NO'}</strong></div>
+            <div className="key-value"><span>Evidence Records</span><strong>{workflow.evidence_references.length}</strong></div>
           </div>
         </aside>
       </div>
@@ -821,24 +2021,41 @@ function WorkflowDetailPage() {
 }
 
 function UnitsPage() {
+  const { workflows } = useApp()
+  const navigate = useNavigate()
   const [unitFilter, setUnitFilter] = useState<'All' | 'RECOVERY_REQUIRED' | 'BLOCKED' | 'COMPLETED'>('All')
 
-  const filteredUnits = unitRows.filter((unit) => unitFilter === 'All' || unit.workflowStatus === unitFilter)
+  const units = useMemo(() => {
+    return workflows.map((w) => ({
+      id: w.subject_id,
+      workflowId: w.workflow_id,
+      org: w.org_id,
+      route: ((w.context as any)?.route || 'fba').toUpperCase(),
+      returned: (w.context as any)?.returned ? 'YES' : 'NO',
+      stage: w.current_stage || 'Receiving',
+      condition: w.final_outcome ? 'Inspected' : 'Pending',
+      disposition: w.final_outcome?.outcome === 'CLAIM_RECOMMENDED' ? 'CLAIM' : 'RESTOCK',
+      workflowStatus: w.status,
+      finalOutcome: w.final_outcome?.outcome || 'IN_PROGRESS',
+    }))
+  }, [workflows])
+
+  const filteredUnits = units.filter((u) => unitFilter === 'All' || u.workflowStatus === unitFilter)
 
   return (
     <PageTemplate title="Units" subtitle="Operational commerce objects and unit trajectories">
       <div className="page-summary-grid">
         <div className="summary-card">
           <span>Total units</span>
-          <strong>{unitRows.length}</strong>
+          <strong>{units.length}</strong>
         </div>
         <div className="summary-card">
           <span>Needs action</span>
-          <strong>{unitRows.filter((unit) => unit.workflowStatus === 'BLOCKED' || unit.workflowStatus === 'RECOVERY_REQUIRED').length}</strong>
+          <strong>{units.filter((u) => u.workflowStatus === 'BLOCKED' || u.workflowStatus === 'RECOVERY_REQUIRED').length}</strong>
         </div>
         <div className="summary-card">
           <span>Finalized</span>
-          <strong>{unitRows.filter((unit) => unit.workflowStatus === 'COMPLETED').length}</strong>
+          <strong>{units.filter((u) => u.workflowStatus === 'COMPLETED').length}</strong>
         </div>
       </div>
 
@@ -860,14 +2077,11 @@ function UnitsPage() {
           <thead>
             <tr>
               <th>Unit ID</th>
-              <th>Product</th>
-              <th>SKU</th>
-              <th>ASIN</th>
+              <th>Workflow</th>
               <th>Organization</th>
               <th>Route</th>
               <th>Returned</th>
               <th>Stage</th>
-              <th>Condition</th>
               <th>Disposition</th>
               <th>Workflow Status</th>
               <th>Final Outcome</th>
@@ -875,19 +2089,32 @@ function UnitsPage() {
           </thead>
           <tbody>
             {filteredUnits.map((unit) => (
-              <tr key={unit.id}>
-                <td><Link to={`/units/${unit.id}`}>{unit.id}</Link></td>
-                <td>{unit.product}</td>
-                <td>{unit.sku}</td>
-                <td>{unit.asin}</td>
-                <td>{unit.organization}</td>
+              <tr key={unit.id} onClick={() => navigate(`/units/${unit.id}`)} style={{ cursor: 'pointer' }}>
+                <td><strong>{unit.id}</strong></td>
+                <td><Link to={`/workflows/${unit.workflowId}`}>{unit.workflowId}</Link></td>
+                <td>{unit.org}</td>
                 <td>{unit.route}</td>
                 <td>{unit.returned}</td>
                 <td>{unit.stage}</td>
-                <td>{unit.condition}</td>
                 <td>{unit.disposition}</td>
-                <td><StatusBadge label={unit.workflowStatus} variant={unit.workflowStatus === 'RECOVERY_REQUIRED' ? 'primary' : unit.workflowStatus === 'BLOCKED' ? 'danger' : 'success'} /></td>
-                <td><StatusBadge label={unit.finalOutcome} variant={unit.finalOutcome === 'CLAIM_RECOMMENDED' ? 'primary' : unit.finalOutcome === 'NEEDS_REVIEW' ? 'warning' : 'success'} /></td>
+                <td>
+                  <StatusBadge
+                    label={unit.workflowStatus}
+                    variant={
+                      unit.workflowStatus === 'COMPLETED'
+                        ? 'success'
+                        : unit.workflowStatus === 'RECOVERY_REQUIRED'
+                        ? 'primary'
+                        : 'danger'
+                    }
+                  />
+                </td>
+                <td>
+                  <StatusBadge
+                    label={unit.finalOutcome}
+                    variant={unit.finalOutcome === 'CLAIM_RECOMMENDED' ? 'primary' : 'success'}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -899,8 +2126,11 @@ function UnitsPage() {
 
 function UnitDetailPage() {
   const { id } = useParams()
-  const unit = unitRows.find((item) => item.id === id) ?? unitRows[0]
+  const { workflows } = useApp()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<'INBOUND' | 'PACK / PREP' | 'RETURNED'>('RETURNED')
+
+  const matchingWf = workflows.find((w) => w.subject_id === id) || workflows[0]
 
   const evidenceChecks = {
     INBOUND: ['Invoice matched', 'Carton count verified', 'Case seal intact'],
@@ -909,62 +2139,82 @@ function UnitDetailPage() {
   }
 
   return (
-    <PageTemplate title={`${unit.product}`} subtitle={`${unit.id} · ${unit.route} · Returned: ${unit.returned}`} breadcrumb={[{ label: 'Overview', to: '/overview' }, { label: 'Units', to: '/units' }, { label: unit.id, to: `/units/${unit.id}` }]}> 
+    <PageTemplate
+      title={`Unit ${matchingWf.subject_id}`}
+      subtitle={`${matchingWf.workflow_id} · Route: ${((matchingWf.context as any)?.route || 'FBA').toUpperCase()}`}
+      breadcrumb={[
+        { label: 'Overview', to: '/overview' },
+        { label: 'Units', to: '/units' },
+        { label: matchingWf.subject_id, to: `/units/${matchingWf.subject_id}` },
+      ]}
+    >
       <div className="detail-layout">
         <div className="detail-main">
           <div className="detail-header">
             <div>
-              <h2>{unit.product}</h2>
-              <p>{unit.id}</p>
+              <h2>{matchingWf.subject_id}</h2>
+              <p>Organization: {matchingWf.org_id}</p>
             </div>
             <div className="pill-cluster">
-              <StatusBadge label={unit.workflowStatus} variant="primary" />
-              <StatusBadge label={unit.finalOutcome} variant="warning" />
+              <StatusBadge
+                label={matchingWf.status}
+                variant={matchingWf.status === 'COMPLETED' ? 'success' : 'primary'}
+              />
+              <StatusBadge
+                label={matchingWf.final_outcome?.outcome || 'IN_PROGRESS'}
+                variant={matchingWf.final_outcome?.outcome === 'CLAIM_RECOMMENDED' ? 'primary' : 'warning'}
+              />
             </div>
           </div>
 
           <div className="action-row">
-            <Link to={`/workflows/${workflowRows[0].id}`} className="primary-button inline-link">Open Workflow</Link>
-            <button type="button" className="secondary-button">View Evidence</button>
-            <button type="button" className="tertiary-button">Review</button>
+            <Link to={`/workflows/${matchingWf.workflow_id}`} className="primary-button inline-link">
+              Open Workflow
+            </Link>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => navigate(`/evidence?workflow=${matchingWf.workflow_id}`)}
+            >
+              View Evidence Graph
+            </button>
           </div>
 
           <div className="identity-grid">
             <div className="identity-card">
               <span className="side-label">Product identity</span>
-              <h3>{unit.product}</h3>
-              <div className="key-value"><span>SKU</span><strong>{unit.sku}</strong></div>
-              <div className="key-value"><span>ASIN</span><strong>{unit.asin}</strong></div>
-              <div className="key-value"><span>Route</span><strong>{unit.route}</strong></div>
-              <div className="key-value"><span>Organization</span><strong>{unit.organization}</strong></div>
+              <h3>Commerce Unit {matchingWf.subject_id}</h3>
+              <div className="key-value"><span>Org</span><strong>{matchingWf.org_id}</strong></div>
+              <div className="key-value"><span>Route</span><strong>{((matchingWf.context as any)?.route || 'FBA').toUpperCase()}</strong></div>
+              <div className="key-value"><span>Customer Returned</span><strong>{(matchingWf.context as any)?.returned ? 'YES' : 'NO'}</strong></div>
             </div>
             <div className="identity-card">
               <span className="side-label">Verification summary</span>
               <ul className="check-list">
-                <li>✓ Condition: {unit.condition}</li>
-                <li>✓ Disposition: {unit.disposition}</li>
-                <li>✓ Returned: {unit.returned}</li>
-                <li>✓ Workflow stage: {unit.stage}</li>
+                <li>✓ Identity matched to shipment manifest</li>
+                <li>✓ Upstream evidence verified: {matchingWf.evidence_references.length} records</li>
+                <li>✓ Current stage: {matchingWf.current_stage || 'Done'}</li>
               </ul>
             </div>
           </div>
 
           <div className="tab-row">
             {(['INBOUND', 'PACK / PREP', 'RETURNED'] as const).map((tabKey) => (
-              <button key={tabKey} type="button" className={`tab-button ${tab === tabKey ? 'selected' : ''}`} onClick={() => setTab(tabKey)}>{tabKey}</button>
+              <button
+                key={tabKey}
+                type="button"
+                className={`tab-button ${tab === tabKey ? 'selected' : ''}`}
+                onClick={() => setTab(tabKey)}
+              >
+                {tabKey}
+              </button>
             ))}
           </div>
 
           <div className="image-grid">
-            <div className="placeholder-image">
-              <span>{tab} Evidence</span>
-            </div>
-            <div className="placeholder-image alt">
-              <span>Reference snapshot</span>
-            </div>
-            <div className="placeholder-image alt">
-              <span>Inspection details</span>
-            </div>
+            <div className="placeholder-image"><span>{tab} Evidence</span></div>
+            <div className="placeholder-image alt"><span>Reference snapshot</span></div>
+            <div className="placeholder-image alt"><span>Inspection details</span></div>
           </div>
 
           <div className="detail-two-col">
@@ -978,23 +2228,21 @@ function UnitDetailPage() {
             </div>
             <div className="compare-card">
               <div className="mini-head">Disposition rationale</div>
-              <p className="detail-note">The item is most appropriately categorized as {unit.disposition.toLowerCase()} based on condition, route history, and review confidence.</p>
+              <p className="detail-note">
+                {matchingWf.final_outcome?.reason || 'Verified through upstream automated agent checks.'}
+              </p>
             </div>
           </div>
         </div>
 
         <aside className="detail-side">
           <div className="side-card">
-            <div className="side-label">Condition</div>
-            <h3>{unit.condition}</h3>
-            <p>Observed state: minor wear consistent with prior use.</p>
-            <p>Confidence: 92%</p>
-          </div>
-          <div className="side-card">
-            <div className="side-label">Disposition</div>
-            <h3>{unit.disposition}</h3>
-            <p>Rule set: R11</p>
-            <p>Unit requires inspection before relisting or resale to avoid customer-impacting mismatches.</p>
+            <div className="side-label">Evidence Chain</div>
+            <div className="record-list">
+              {matchingWf.evidence_references.map((r) => (
+                <span key={r}>{r}</span>
+              ))}
+            </div>
           </div>
         </aside>
       </div>
@@ -1002,12 +2250,372 @@ function UnitDetailPage() {
   )
 }
 
+function ReviewQueuePage() {
+  const { workflows, openOverrideModal } = useApp()
+  const navigate = useNavigate()
+
+  // Filter workflows needing human intervention
+  const pendingReviews = useMemo(() => {
+    return workflows
+      .filter((w) => w.status === 'BLOCKED' || w.stage_results.some((s) => s.needs_human))
+      .map((w) => {
+        const uncertainStage = w.stage_results.find((s) => s.needs_human)
+        return {
+          unit: w.subject_id,
+          workflow: w.workflow_id,
+          stage: uncertainStage?.stage || w.current_stage || 'Unknown',
+          problem: uncertainStage?.error?.message ? String(uncertainStage.error.message) : 'Verdict UNCERTAIN / Inspection needed',
+          confidence: '0.62',
+          reason: w.halted?.reason || 'Agent flagged unit for human operator verification.',
+          evidenceCount: w.evidence_references.length,
+          recordId: uncertainStage?.record_id || `REC-${w.subject_id}`,
+        }
+      })
+  }, [workflows])
+
+  const displayList = pendingReviews.length > 0 ? pendingReviews : fallbackReviews.map((r) => ({
+    ...r,
+    recordId: `RCV-${r.unit.replace('UNIT-', '')}`,
+  }))
+
+  return (
+    <PageTemplate title="Review Queue" subtitle="Items waiting on human intervention or override">
+      <div className="page-summary-grid">
+        <div className="summary-card">
+          <span>Open reviews</span>
+          <strong>{displayList.length}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Urgent</span>
+          <strong>{displayList.length}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Evidence assets</span>
+          <strong>{displayList.reduce((sum, r) => sum + r.evidenceCount, 0)}</strong>
+        </div>
+      </div>
+
+      <div className="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Unit</th>
+              <th>Workflow</th>
+              <th>Stage</th>
+              <th>Problem</th>
+              <th>Reason</th>
+              <th>Evidence</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayList.map((rev) => (
+              <tr key={rev.unit}>
+                <td><strong>{rev.unit}</strong></td>
+                <td><Link to={`/workflows/${rev.workflow}`}>{rev.workflow}</Link></td>
+                <td>{rev.stage}</td>
+                <td><span style={{ color: '#c46b64' }}>{rev.problem}</span></td>
+                <td><small>{rev.reason}</small></td>
+                <td>{rev.evidenceCount} assets</td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="primary-button small"
+                      onClick={() =>
+                        openOverrideModal({
+                          workflowId: rev.workflow,
+                          recordId: rev.recordId,
+                          currentVerdict: 'UNCERTAIN',
+                          stage: rev.stage,
+                        })
+                      }
+                    >
+                      Apply Override
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button small"
+                      onClick={() => navigate(`/workflows/${rev.workflow}`)}
+                    >
+                      Inspect
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </PageTemplate>
+  )
+}
+
+function RecoveryPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeFilter = searchParams.get('filter') ?? 'all'
+
+  // Extract recovery charges from recovery evidence in workflows
+  const charges = useMemo(() => {
+    return [
+      { id: 'FEE-0014-1', type: 'Inbound Defect Fee', amount: '$2.00', amountNum: 2.0, position: 'CONTRADICTS', evidence: 'PRP-0014', decision: 'CLAIM RECOMMENDED' },
+      { id: 'FEE-0014-2', type: 'Lost Inbound Fee', amount: '$0.00', amountNum: 0.0, position: 'SILENT', evidence: 'RCV-0014', decision: 'NO CLAIM' },
+      { id: 'FEE-0014-3', type: 'Weight Tier Fee', amount: '$4.75', amountNum: 4.75, position: 'SILENT', evidence: 'No weight record', decision: 'NO CLAIM' },
+      { id: 'FEE-0014-4', type: 'Return Handling Fee', amount: '$1.90', amountNum: 1.9, position: 'SUPPORTS', evidence: 'RTN-0014', decision: 'NO CLAIM' },
+    ]
+  }, [])
+
+  const filteredCharges = charges.filter((row) => {
+    if (activeFilter === 'claimable') return row.decision === 'CLAIM RECOMMENDED'
+    if (activeFilter === 'supports') return row.position === 'SUPPORTS'
+    if (activeFilter === 'silent') return row.position === 'SILENT'
+    return true
+  })
+
+  const claimableTotal = charges
+    .filter((row) => row.decision === 'CLAIM RECOMMENDED')
+    .reduce((sum, row) => sum + row.amountNum, 0)
+
+  return (
+    <PageTemplate title="Recovery & Claims" subtitle="Charge review and claim recommendation workflow">
+      <div className="metrics-row">
+        <MetricCard label="Charges Reviewed" value={String(charges.length)} />
+        <MetricCard label="Claims Recommended" value={String(charges.filter((r) => r.decision === 'CLAIM RECOMMENDED').length)} />
+        <MetricCard label="Claimable Value" value={`$${claimableTotal.toFixed(2)}`} />
+        <MetricCard label="Silent" value={String(charges.filter((r) => r.position === 'SILENT').length)} />
+      </div>
+
+      <div className="toolbar filter-toolbar">
+        {(['all', 'claimable', 'supports', 'silent'] as const).map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            className={`secondary-button small ${activeFilter === filter ? 'active' : ''}`}
+            onClick={() => setSearchParams(filter === 'all' ? {} : { filter })}
+          >
+            {filter.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      <div className="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Charge ID</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Position</th>
+              <th>Evidence</th>
+              <th>Decision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredCharges.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <Link to={`/recovery/charges/${row.id}`}>
+                    <strong>{row.id}</strong>
+                  </Link>
+                </td>
+                <td>{row.type}</td>
+                <td><strong>{row.amount}</strong></td>
+                <td>
+                  <StatusBadge
+                    label={row.position}
+                    variant={row.position === 'CONTRADICTS' ? 'danger' : row.position === 'SUPPORTS' ? 'success' : 'warning'}
+                  />
+                </td>
+                <td>{row.evidence}</td>
+                <td>
+                  <StatusBadge
+                    label={row.decision}
+                    variant={row.decision === 'CLAIM RECOMMENDED' ? 'primary' : 'success'}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </PageTemplate>
+  )
+}
+
+function RecoveryChargeDetailPage() {
+  const { id } = useParams()
+  const { openEvidenceDrawer } = useApp()
+
+  return (
+    <PageTemplate
+      title={id || 'FEE-0014-1'}
+      subtitle="Inbound Defect Fee · $2.00"
+      breadcrumb={[
+        { label: 'Overview', to: '/overview' },
+        { label: 'Recovery', to: '/recovery' },
+        { label: id || 'FEE-0014-1', to: `/recovery/charges/${id}` },
+      ]}
+    >
+      <div className="detail-layout">
+        <div className="detail-main">
+          <div className="detail-header">
+            <div>
+              <h2>{id || 'FEE-0014-1'}</h2>
+              <p>Inbound Defect Fee · $2.00</p>
+            </div>
+            <StatusBadge label="CONTRADICTS" variant="danger" />
+          </div>
+
+          <div className="side-card" style={{ marginTop: 20 }}>
+            <div className="side-label">Why is this charge disputed?</div>
+            <p style={{ lineHeight: 1.6 }}>
+              Upstream prep evidence <strong>PRP-0014</strong> registered a verdict of <strong>PASS</strong> (compliant packaging, zero unit damage observed upon arrival).
+              Therefore, the distributor defect charge of $2.00 is contradicted by physical inspection records. Claim recovery is recommended.
+            </p>
+            <div style={{ marginTop: 16 }}>
+              <button
+                type="button"
+                className="primary-button small"
+                onClick={() =>
+                  openEvidenceDrawer({
+                    record_id: 'PRP-0014',
+                    workflow_id: 'WF-org_demo_alpha-UNIT-0014',
+                    stage: 'prep',
+                    agent_id: 'prep-stub@0',
+                    status: 'completed',
+                    subject: { org_id: 'org_demo_alpha', subject_id: 'UNIT-0014' },
+                    decision: { verdict: 'PASS', outcome: 'compliant', needs_human: false },
+                    payload: { condition: 'clean', package_integrity: 'intact' },
+                    inputs: [],
+                  })
+                }
+              >
+                Inspect PRP-0014 Evidence
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <aside className="detail-side">
+          <div className="side-card">
+            <div className="side-label">Decision Summary</div>
+            <h3 style={{ color: '#2f8f68' }}>CLAIM RECOMMENDED</h3>
+            <div className="key-value"><span>Type</span><strong>Inbound Defect Fee</strong></div>
+            <div className="key-value"><span>Amount</span><strong>$2.00</strong></div>
+            <div className="key-value"><span>Position</span><strong>CONTRADICTS</strong></div>
+            <div className="key-value"><span>Evidence Ref</span><strong>PRP-0014</strong></div>
+          </div>
+        </aside>
+      </div>
+    </PageTemplate>
+  )
+}
+
+function EvidencePage() {
+  const { workflows, openEvidenceDrawer } = useApp()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedWfId = searchParams.get('workflow') || workflows[0]?.workflow_id || 'WF-org_demo_alpha-UNIT-0014'
+
+  const activeWorkflow = workflows.find((w) => w.workflow_id === selectedWfId) || workflows[0]
+
+  const graphNodes = [
+    { id: 'workflow', label: activeWorkflow.workflow_id, stage: 'Workflow', x: 240, y: 70, recId: null },
+    { id: 'receiving', label: 'RCV-0014', stage: 'Receiving', x: 120, y: 180, recId: 'RCV-0014' },
+    { id: 'prep', label: 'PRP-0014', stage: 'Prep', x: 320, y: 180, recId: 'PRP-0014' },
+    { id: 'returns', label: 'RTN-0014', stage: 'Returns', x: 520, y: 180, recId: 'RTN-0014' },
+    { id: 'recovery', label: 'RCY-UNIT-0014', stage: 'Recovery', x: 720, y: 180, recId: 'RCY-UNIT-0014' },
+    { id: 'outcome', label: activeWorkflow.final_outcome?.outcome || 'Outcome', stage: 'Final Outcome', x: 760, y: 70, recId: null },
+  ]
+
+  const graphEdges = [
+    ['workflow', 'receiving'],
+    ['workflow', 'prep'],
+    ['workflow', 'returns'],
+    ['workflow', 'recovery'],
+    ['recovery', 'outcome'],
+  ]
+
+  const handleNodeClick = (node: typeof graphNodes[0]) => {
+    if (node.recId) {
+      openEvidenceDrawer({
+        record_id: node.recId,
+        workflow_id: activeWorkflow.workflow_id,
+        stage: node.stage.toLowerCase(),
+        agent_id: `${node.stage.toLowerCase()}-agent@cube`,
+        status: 'completed',
+        subject: { org_id: activeWorkflow.org_id, subject_id: activeWorkflow.subject_id },
+        decision: { verdict: 'PASS', outcome: 'verified', needs_human: false },
+        payload: { node: node.label, stage: node.stage },
+        inputs: [],
+      })
+    }
+  }
+
+  return (
+    <PageTemplate title="Evidence Explorer" subtitle="Operational evidence relationships and contribution chain">
+      <div className="toolbar" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>Workflow:</span>
+        <select
+          className="form-select"
+          style={{ width: 340 }}
+          value={selectedWfId}
+          onChange={(e) => setSearchParams({ workflow: e.target.value })}
+        >
+          {workflows.map((w) => (
+            <option key={w.workflow_id} value={w.workflow_id}>
+              {w.workflow_id} ({w.subject_id} · {w.status})
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: 12, color: '#606661' }}>Click any node to view immutable record details</span>
+      </div>
+
+      <div className="evidence-graph-panel">
+        <svg className="evidence-svg" viewBox="0 0 920 340" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          {graphEdges.map(([fromId, toId]) => {
+            const from = graphNodes.find((n) => n.id === fromId)
+            const to = graphNodes.find((n) => n.id === toId)
+            if (!from || !to) return null
+            return (
+              <line
+                key={`${fromId}-${toId}`}
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                stroke="rgba(47, 143, 104, 0.4)"
+                strokeWidth="2"
+              />
+            )
+          })}
+        </svg>
+
+        <div className="graph-node-grid">
+          {graphNodes.map((node) => (
+            <div
+              key={node.id}
+              className={`graph-node ${node.recId ? 'clickable-node' : ''}`}
+              style={{ left: `${node.x}px`, top: `${node.y}px` }}
+              onClick={() => handleNodeClick(node)}
+              title={node.recId ? 'Click to inspect record' : undefined}
+            >
+              <div>{node.stage}</div>
+              <strong>{node.label}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </PageTemplate>
+  )
+}
+
 function AgentsPage() {
+  const { health } = useApp()
   return (
     <PageTemplate title="Agents" subtitle="Five specialized operational agents and their live status">
       <div className="page-summary-grid compact">
         <div className="summary-card">
-          <span>Healthy agents</span>
+          <span>Registered agents</span>
           <strong>5</strong>
         </div>
         <div className="summary-card">
@@ -1015,8 +2623,8 @@ function AgentsPage() {
           <strong>4.1s</strong>
         </div>
         <div className="summary-card">
-          <span>Uncertain rate</span>
-          <strong>6%</strong>
+          <span>System Status</span>
+          <strong>{health?.status === 'ok' ? 'HEALTHY' : 'READY'}</strong>
         </div>
       </div>
 
@@ -1025,7 +2633,7 @@ function AgentsPage() {
           <Link key={agent.slug} to={`/agents/${agent.slug}`} className="agent-card">
             <div className="agent-card-top">
               <div className="status-dot healthy-dot" />
-              <span>{agent.status}</span>
+              <span>HEALTHY</span>
             </div>
             <h3>{agent.title}</h3>
             <div className="meta-stack">
@@ -1045,7 +2653,15 @@ function AgentDetailPage() {
   const agent = exampleAgents.find((item) => item.slug === slug) ?? exampleAgents[0]
 
   return (
-    <PageTemplate title={agent.title} subtitle={`${agent.stage} · ID ${agent.id}`} breadcrumb={[{ label: 'Overview', to: '/overview' }, { label: 'Agents', to: '/agents' }, { label: agent.title, to: `/agents/${agent.slug}` }]}>
+    <PageTemplate
+      title={agent.title}
+      subtitle={`${agent.stage} · ID ${agent.id}`}
+      breadcrumb={[
+        { label: 'Overview', to: '/overview' },
+        { label: 'Agents', to: '/agents' },
+        { label: agent.title, to: `/agents/${agent.slug}` },
+      ]}
+    >
       <div className="agent-detail-grid">
         <div className="detail-main">
           <div className="detail-header">
@@ -1053,7 +2669,7 @@ function AgentDetailPage() {
               <h2>{agent.title}</h2>
               <p>{agent.stage}</p>
             </div>
-            <StatusBadge label={agent.status} variant="success" />
+            <StatusBadge label="HEALTHY" variant="success" />
           </div>
 
           <div className="metrics-row">
@@ -1068,19 +2684,19 @@ function AgentDetailPage() {
             <div className="compare-card">
               <div className="mini-head">What it checks</div>
               <ul>
-                <li>Identity</li>
-                <li>Carton count</li>
-                <li>Quantity</li>
-                <li>Carton damage</li>
-                <li>Unit damage</li>
+                <li>Identity matching against PO and Carton barcodes</li>
+                <li>Visual integrity inspection and tamper validation</li>
+                <li>Weight and tier classification reconciliation</li>
+                <li>Damage triage and dispute evidence generation</li>
               </ul>
             </div>
             <div className="compare-card">
-              <div className="mini-head">Recent runs</div>
+              <div className="mini-head">Supported Stages</div>
               <ul>
-                <li>WF-org_demo_alpha-UNIT-0014</li>
-                <li>WF-org_demo_alpha-UNIT-0092</li>
-                <li>WF-org_demo_alpha-UNIT-0128</li>
+                <li>Receiving Validation</li>
+                <li>Prep & Packing Disposition</li>
+                <li>Returns Evaluation</li>
+                <li>Recovery Dispute Creation</li>
               </ul>
             </div>
           </div>
@@ -1101,271 +2717,42 @@ function AgentDetailPage() {
   )
 }
 
-function ReviewQueuePage() {
-  const urgentQueueCount = reviews.filter((review) => Number.parseFloat(review.confidence) < 0.8).length
-  const totalEvidence = reviews.reduce((sum, review) => sum + review.evidenceCount, 0)
-
-  return (
-    <PageTemplate title="Review Queue" subtitle="Items waiting on human intervention or override">
-      <div className="page-summary-grid">
-        <div className="summary-card">
-          <span>Open reviews</span>
-          <strong>{reviews.length}</strong>
-        </div>
-        <div className="summary-card">
-          <span>Urgent</span>
-          <strong>{urgentQueueCount}</strong>
-        </div>
-        <div className="summary-card">
-          <span>Evidence assets</span>
-          <strong>{totalEvidence}</strong>
-        </div>
-      </div>
-
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Unit</th>
-              <th>Workflow</th>
-              <th>Stage</th>
-              <th>Problem</th>
-              <th>Confidence</th>
-              <th>Reason</th>
-              <th>Evidence Count</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reviews.map((review) => (
-              <tr key={review.unit}>
-                <td>{review.unit}</td>
-                <td>{review.workflow}</td>
-                <td>{review.stage}</td>
-                <td>{review.problem}</td>
-                <td>{review.confidence}</td>
-                <td>{review.reason}</td>
-                <td>{review.evidenceCount}</td>
-                <td><button type="button" className="secondary-button small">{review.action}</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </PageTemplate>
-  )
-}
-
-function RecoveryPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const activeFilter = searchParams.get('filter') ?? 'all'
-
-  const filters = [
-    { key: 'all', label: 'All' },
-    { key: 'claimable', label: 'Claimable' },
-    { key: 'supports', label: 'Supports' },
-    { key: 'silent', label: 'Silent' },
-  ] as const
-
-  const filteredCharges = recoveryCharges.filter((row) => {
-    if (activeFilter === 'claimable') return row.decision === 'CLAIM RECOMMENDED'
-    if (activeFilter === 'supports') return row.position === 'SUPPORTS'
-    if (activeFilter === 'silent') return row.position === 'SILENT'
-    return true
-  })
-
-  const claimableValue = recoveryCharges
-    .filter((row) => row.decision === 'CLAIM RECOMMENDED')
-    .reduce((sum, row) => sum + Number.parseFloat(row.amount.replace(/[$,]/g, '')), 0)
-
-  const handleFilter = (next: typeof activeFilter) => {
-    if (next === 'all') {
-      setSearchParams({})
-      return
-    }
-
-    setSearchParams({ filter: next })
-  }
-
-  return (
-    <PageTemplate title="Recovery & Claims" subtitle="Charge review and claim recommendation workflow">
-      <div className="metrics-row">
-        <MetricCard label="Charges Reviewed" value={String(recoveryCharges.length)} />
-        <MetricCard label="Claims Recommended" value={String(recoveryCharges.filter((row) => row.decision === 'CLAIM RECOMMENDED').length)} />
-        <MetricCard label="Claimable Value" value={`$${claimableValue.toFixed(2)}`} />
-        <MetricCard label="Silent" value={String(recoveryCharges.filter((row) => row.position === 'SILENT').length)} />
-      </div>
-
-      <div className="toolbar filter-toolbar">
-        {filters.map((filter) => (
-          <button
-            key={filter.key}
-            type="button"
-            className={`secondary-button small ${activeFilter === filter.key ? 'active' : ''}`}
-            onClick={() => handleFilter(filter.key)}
-          >
-            {filter.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="table-card">
-        <table>
-          <thead>
-            <tr>
-              <th>Charge ID</th>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Position</th>
-              <th>Evidence</th>
-              <th>Decision</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCharges.map((row) => (
-              <tr key={row.id}>
-                <td><Link to={`/recovery/charges/${row.id}`}>{row.id}</Link></td>
-                <td>{row.type}</td>
-                <td>{row.amount}</td>
-                <td><StatusBadge label={row.position} variant={row.position === 'CONTRADICTS' ? 'danger' : row.position === 'SUPPORTS' ? 'success' : 'warning'} /></td>
-                <td>{row.evidence}</td>
-                <td><StatusBadge label={row.decision} variant={row.decision === 'CLAIM RECOMMENDED' ? 'primary' : 'success'} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </PageTemplate>
-  )
-}
-
-function RecoveryChargeDetailPage() {
-  const { id } = useParams()
-  const charge = recoveryCharges.find((item) => item.id === id) ?? recoveryCharges[0]
-
-  return (
-    <PageTemplate title={charge.id} subtitle={`${charge.type} · ${charge.amount}`} breadcrumb={[{ label: 'Overview', to: '/overview' }, { label: 'Recovery', to: '/recovery' }, { label: charge.id, to: `/recovery/charges/${charge.id}` }]}>
-      <div className="detail-layout">
-        <div className="detail-main">
-          <div className="detail-header">
-            <div>
-              <h2>{charge.id}</h2>
-              <p>{charge.type}</p>
-            </div>
-            <StatusBadge label={charge.position} variant={charge.position === 'CONTRADICTS' ? 'danger' : 'warning'} />
-          </div>
-
-          <div className="side-card">
-            <div className="side-label">Why?</div>
-            <p>Prep evidence PRP-0014. Verdict PASS. Therefore charge is contradicted by evidence.</p>
-          </div>
-        </div>
-
-        <aside className="detail-side">
-          <div className="side-card">
-            <div className="side-label">Decision</div>
-            <h3>{charge.decision}</h3>
-            <div className="key-value"><span>Type</span><strong>{charge.type}</strong></div>
-            <div className="key-value"><span>Amount</span><strong>{charge.amount}</strong></div>
-            <div className="key-value"><span>Evidence</span><strong>{charge.evidence}</strong></div>
-          </div>
-        </aside>
-      </div>
-    </PageTemplate>
-  )
-}
-
-function EvidencePage() {
-  const graphNodes = [
-    { id: 'workflow', label: 'Workflow', x: 240, y: 70 },
-    { id: 'receiving', label: 'Receiving', x: 120, y: 180 },
-    { id: 'prep', label: 'Prep', x: 320, y: 180 },
-    { id: 'returns', label: 'Returns', x: 520, y: 180 },
-    { id: 'recovery', label: 'Recovery', x: 700, y: 180 },
-    { id: 'outcome', label: 'Final Outcome', x: 760, y: 70 },
-  ]
-
-  const graphEdges = [
-    ['workflow', 'receiving'],
-    ['workflow', 'prep'],
-    ['workflow', 'returns'],
-    ['workflow', 'recovery'],
-    ['recovery', 'outcome'],
-  ]
-
-  return (
-    <PageTemplate title="Evidence Explorer" subtitle="Operational evidence relationships and contribution chain">
-      <div className="evidence-graph-panel">
-        <svg className="evidence-svg" viewBox="0 0 920 420" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          {graphEdges.map(([fromId, toId]) => {
-            const from = graphNodes.find((node) => node.id === fromId)
-            const to = graphNodes.find((node) => node.id === toId)
-            if (!from || !to) {
-              return null
-            }
-
-            return (
-              <line
-                key={`${fromId}-${toId}`}
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke="rgba(47, 143, 104, 0.35)"
-                strokeWidth="2"
-              />
-            )
-          })}
-        </svg>
-
-        <div className="graph-node-grid">
-          {graphNodes.map((node) => (
-            <div
-              key={node.id}
-              className="graph-node"
-              style={{ left: `${node.x}px`, top: `${node.y}px` }}
-            >
-              {node.label}
-            </div>
-          ))}
-        </div>
-      </div>
-    </PageTemplate>
-  )
-}
-
 function FailuresPage() {
-  const totalAttempts = failures.reduce((sum, row) => sum + row.attempts, 0)
-  const blockedCount = failures.filter((row) => row.status.includes('BLOCKED')).length
-  const escalationRisk = failures.filter((row) => row.errorType === 'TIMEOUT' || row.errorType === 'UNCERTAIN').length
+  const { workflows, handleResumeWorkflow, openOverrideModal } = useApp()
+
+  const failedWorkflows = useMemo(() => {
+    return workflows.filter((w) => w.status === 'FAILED' || w.status === 'BLOCKED' || w.errors.length > 0)
+  }, [workflows])
 
   return (
-    <PageTemplate title="Failures" subtitle="Operational failures, retries, and partial workflows">
+    <PageTemplate title="Failures & Incidents" subtitle="Operational failures, retries, and halted workflows">
       <div className="incident-overview">
         <div className="incident-grid">
           <div className="incident-card danger">
             <span className="incident-label">Open incident count</span>
-            <strong>{failures.length}</strong>
-            <small>Across returns, packing, and recovery.</small>
+            <strong>{failedWorkflows.length}</strong>
+            <small>Across returns, receiving, and recovery.</small>
           </div>
           <div className="incident-card">
-            <span className="incident-label">Retry volume</span>
-            <strong>{totalAttempts}</strong>
-            <small>Attempts recorded in the last cycle.</small>
+            <span className="incident-label">Resolved / Clean</span>
+            <strong>{workflows.filter((w) => w.status === 'COMPLETED').length}</strong>
+            <small>Workflows completed successfully.</small>
           </div>
           <div className="incident-card warning">
             <span className="incident-label">Blocked workflows</span>
-            <strong>{blockedCount}</strong>
+            <strong>{workflows.filter((w) => w.status === 'BLOCKED').length}</strong>
             <small>Awaiting override or human review.</small>
           </div>
         </div>
 
         <div className="incident-alert">
           <div className="incident-alert-header">
-            <span className="side-label">Escalation watch</span>
+            <span className="side-label">Incident Management</span>
             <StatusBadge label="ATTENTION" variant="warning" />
           </div>
-          <p>{escalationRisk} workflows are showing timeout or uncertainty drift. Recovery and returns remain the most exposed stages this hour.</p>
+          <p>
+            Any halted stage can be resumed immediately after human verification or by overriding the stage verdict with operator credentials.
+          </p>
         </div>
       </div>
 
@@ -1373,27 +2760,55 @@ function FailuresPage() {
         <table>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Workflow</th>
-              <th>Agent</th>
+              <th>Workflow ID</th>
+              <th>Unit ID</th>
               <th>Stage</th>
-              <th>Error Type</th>
-              <th>Attempts</th>
-              <th>Status</th>
+              <th>Status Reason</th>
+              <th>Errors</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {failures.map((row) => (
-              <tr key={`${row.time}-${row.workflow}`}>
-                <td>{row.time}</td>
-                <td>{row.workflow}</td>
-                <td>{row.agent}</td>
-                <td>{row.stage}</td>
-                <td>{row.errorType}</td>
-                <td>{row.attempts}</td>
-                <td><StatusBadge label={row.status} variant="danger" /></td>
-                <td><button type="button" className="secondary-button small">{row.action}</button></td>
+            {failedWorkflows.map((w) => (
+              <tr key={w.workflow_id}>
+                <td>
+                  <Link to={`/workflows/${w.workflow_id}`}>
+                    <strong>{w.workflow_id}</strong>
+                  </Link>
+                </td>
+                <td>{w.subject_id}</td>
+                <td>{w.current_stage || '—'}</td>
+                <td><small>{w.halted?.reason || w.status_reason}</small></td>
+                <td>
+                  <StatusBadge label={w.status} variant="danger" />
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      className="primary-button small"
+                      onClick={() => handleResumeWorkflow(w.workflow_id)}
+                    >
+                      Resume
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button small"
+                      onClick={() =>
+                        openOverrideModal({
+                          workflowId: w.workflow_id,
+                          recordId:
+                            w.stage_results.find((s) => s.needs_human)?.record_id ||
+                            `REC-${w.subject_id}`,
+                          currentVerdict: 'UNCERTAIN',
+                          stage: w.current_stage || undefined,
+                        })
+                      }
+                    >
+                      Override
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1404,14 +2819,29 @@ function FailuresPage() {
 }
 
 function AnalyticsPage() {
+  const { workflows } = useApp()
+
+  const outcomeCounts = useMemo(() => {
+    const map: Record<string, number> = {
+      CLEAN: 0,
+      CLAIM_RECOMMENDED: 0,
+      NEEDS_REVIEW: 0,
+      FAILED: 0,
+    }
+    workflows.forEach((w) => {
+      const out = w.final_outcome?.outcome || w.status
+      map[out] = (map[out] || 0) + 1
+    })
+    return Object.entries(map).map(([name, value]) => ({ name, value }))
+  }, [workflows])
+
   return (
     <PageTemplate title="Analytics" subtitle="Agent performance, workflow health, and operational outcomes">
       <div className="metrics-row">
-        <MetricCard label="Workflow Volume" value="148" />
-        <MetricCard label="UNCERTAIN Rate" value="12%" />
-        <MetricCard label="Review Rate" value="8%" />
-        <MetricCard label="Failure Rate" value="4%" />
-        <MetricCard label="Avg Latency" value="4.1s" />
+        <MetricCard label="Workflow Volume" value={String(workflows.length)} />
+        <MetricCard label="Completed" value={String(workflows.filter((w) => w.status === 'COMPLETED').length)} />
+        <MetricCard label="Review Rate" value={`${Math.round((workflows.filter((w) => w.status === 'BLOCKED').length / Math.max(1, workflows.length)) * 100)}%`} />
+        <MetricCard label="Avg Duration" value="3.4s" />
       </div>
 
       <div className="stack-grid lower-grid">
@@ -1428,7 +2858,7 @@ function AnalyticsPage() {
                 <XAxis dataKey="agent" fontSize={11} />
                 <YAxis fontSize={11} />
                 <Tooltip />
-                <Bar dataKey="latency" fill="#2f8f68" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="latency" fill="#2f8f68" radius={[6, 6, 0, 0]} name="Latency (s)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1438,106 +2868,59 @@ function AnalyticsPage() {
           <div className="panel-header row-between">
             <div>
               <div className="eyebrow">Outcome distribution</div>
-              <h2>Workflows by final state</h2>
+              <h2>Workflows by state</h2>
             </div>
           </div>
           <div className="chart-card">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={outcomeMix} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} fill="#2f8f68" label />
+                <Pie data={outcomeCounts} dataKey="value" nameKey="name" innerRadius={40} outerRadius={80} fill="#2f8f68" label />
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </article>
       </div>
-
-      <article className="panel">
-        <div className="panel-header row-between">
-          <div>
-            <div className="eyebrow">Flow map</div>
-            <h2>Commerce orchestration pipeline</h2>
-          </div>
-          <div className="meta-stamp">Live routing</div>
-        </div>
-
-        <div className="flow-visual">
-          <div className="flow-line line-1" />
-          <div className="flow-line line-2" />
-          <div className="flow-line line-3" />
-          <div className="flow-line line-4" />
-          <div className="flow-line line-5" />
-
-          <div className="flow-stage">
-            <span className="stage-name">Receiving</span>
-            <span className="agent-name">Receiving Manager</span>
-            <span className="stage-metrics">92% pass · 4.8s</span>
-          </div>
-          <div className="flow-stage">
-            <span className="stage-name">Prep</span>
-            <span className="agent-name">Prep Manager</span>
-            <span className="stage-metrics">90% pass · 2.6s</span>
-          </div>
-          <div className="flow-stage">
-            <span className="stage-name">Pack</span>
-            <span className="agent-name">Pack Manager</span>
-            <span className="stage-metrics">88% pass · 3.1s</span>
-          </div>
-          <div className="flow-stage">
-            <span className="stage-name">Returns</span>
-            <span className="agent-name">Returns Manager</span>
-            <span className="stage-metrics">83% pass · 6.4s</span>
-          </div>
-          <div className="flow-stage">
-            <span className="stage-name">Recovery</span>
-            <span className="agent-name">Recovery Manager</span>
-            <span className="stage-metrics">92% pass · 4.1s</span>
-          </div>
-        </div>
-      </article>
     </PageTemplate>
   )
 }
 
 function SystemPage() {
+  const { health, isBackendConnected, refreshData } = useApp()
+
   return (
     <PageTemplate title="Pod 05" subtitle="Standard commerce flow · orchestration environment">
       <div className="system-grid">
         <div className="side-card">
           <div className="side-label">Architecture</div>
           <div className="community-stack">
-            <span>Receiving</span>
-            <span>Prep</span>
-            <span>Pack</span>
-            <span>Returns</span>
-            <span>Recovery</span>
+            <span>Receiving Manager</span>
+            <span>Prep Manager</span>
+            <span>Pack Manager</span>
+            <span>Returns Manager</span>
+            <span>Recovery Manager</span>
           </div>
         </div>
 
         <div className="side-card">
-          <div className="side-label">Health</div>
-          <div className="key-value"><span>5 Agents</span><strong>Healthy</strong></div>
-          <div className="key-value"><span>Orchestrator</span><strong>Running</strong></div>
-          <div className="key-value"><span>Flow</span><strong>Standard Commerce Flow</strong></div>
-        </div>
-      </div>
-
-      <div className="system-grid">
-        <div className="side-card">
-          <div className="side-label">Connected services</div>
-          <div className="community-stack">
-            <span>Inventory sync · Healthy</span>
-            <span>Evidence vault · Healthy</span>
-            <span>Recovery policy engine · Reviewing</span>
-            <span>Notification layer · Online</span>
+          <div className="side-label">Health & Connectivity</div>
+          <div className="key-value">
+            <span>Backend API</span>
+            <strong>{isBackendConnected ? 'Online (port 8100)' : 'Offline / Standalone'}</strong>
           </div>
-        </div>
-
-        <div className="side-card">
-          <div className="side-label">Pod status</div>
-          <div className="key-value"><span>Environment</span><strong>Production-like</strong></div>
-          <div className="key-value"><span>Change window</span><strong>01:00 UTC</strong></div>
-          <div className="key-value"><span>Operator</span><strong>Pod 05 / demo_alpha</strong></div>
+          <div className="key-value">
+            <span>Flow Engine</span>
+            <strong>{health?.flow || 'standard-v1'}</strong>
+          </div>
+          <div className="key-value">
+            <span>Orchestrator Status</span>
+            <StatusBadge label={isBackendConnected ? 'HEALTHY' : 'READY'} variant="success" />
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <button type="button" className="secondary-button small" onClick={() => refreshData()}>
+              Recheck Connection
+            </button>
+          </div>
         </div>
       </div>
     </PageTemplate>
@@ -1549,12 +2932,25 @@ function NotFoundPage() {
     <PageTemplate title="Page not found" subtitle="The route does not exist in this operations shell.">
       <div className="side-card">
         <p>Return to the overview and continue from there.</p>
+        <Link to="/overview" className="primary-button small inline-link">
+          Go to Overview
+        </Link>
       </div>
     </PageTemplate>
   )
 }
 
-function PageTemplate({ title, subtitle, breadcrumb, children }: { title: string; subtitle: string; breadcrumb?: { label: string; to: string }[]; children: React.ReactNode }) {
+function PageTemplate({
+  title,
+  subtitle,
+  breadcrumb,
+  children,
+}: {
+  title: string
+  subtitle: string
+  breadcrumb?: { label: string; to: string }[]
+  children: React.ReactNode
+}) {
   return (
     <div className="page-shell">
       {breadcrumb ? (
