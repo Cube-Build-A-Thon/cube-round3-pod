@@ -1,132 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
 :root {
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-
-  /* Color Palette - Deep Dark Space / Cyberpunk High-Tech */
-  --bg-base: #070a12;
-  --bg-surface: #0c1222;
-  --bg-card: #111a30;
-  --bg-card-hover: #16223f;
-  --bg-card-active: #1c2b50;
-  --bg-glass: rgba(17, 26, 48, 0.75);
-
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.14);
-  --border-bright: rgba(56, 189, 248, 0.4);
-
-  --text-main: #f1f5f9;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
-
-  /* Accents & Verdicts */
-  --accent-cyan: #06b6d4;
-  --accent-cyan-glow: rgba(6, 182, 212, 0.35);
-  --accent-blue: #38bdf8;
-  --accent-purple: #8b5cf6;
-
-  --verdict-pass: #10b981;
-  --verdict-pass-bg: rgba(16, 185, 129, 0.12);
-  --verdict-pass-border: rgba(16, 185, 129, 0.4);
-  --verdict-pass-glow: rgba(16, 185, 129, 0.3);
-
-  --verdict-fail: #f43f5e;
-  --verdict-fail-bg: rgba(244, 63, 94, 0.12);
-  --verdict-fail-border: rgba(244, 63, 94, 0.4);
-  --verdict-fail-glow: rgba(244, 63, 94, 0.3);
-
-  --verdict-uncertain: #f59e0b;
-  --verdict-uncertain-bg: rgba(245, 158, 11, 0.14);
-  --verdict-uncertain-border: rgba(245, 158, 11, 0.45);
-  --verdict-uncertain-glow: rgba(245, 158, 11, 0.3);
-
-  --verdict-skipped: #64748b;
-  --verdict-skipped-bg: rgba(100, 116, 139, 0.12);
-  --verdict-skipped-border: rgba(100, 116, 139, 0.3);
-
-  /* Shadows */
-  --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
-  --shadow-glow-cyan: 0 0 25px -5px rgba(6, 182, 212, 0.4);
-  --shadow-glow-emerald: 0 0 25px -5px rgba(16, 185, 129, 0.4);
-  --shadow-glow-amber: 0 0 25px -5px rgba(245, 158, 11, 0.4);
-  --shadow-glow-rose: 0 0 25px -5px rgba(244, 63, 94, 0.4);
+  font-family: Inter, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #171a18;
+  background: #f5f6f3;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
   margin: 0;
-  padding: 0;
+  min-width: 320px;
+  height: 100%;
+  background: #f5f6f3;
 }
 
 body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-base);
-  color: var(--text-main);
-  min-height: 100vh;
   overflow-x: hidden;
-  background-image:
-    radial-gradient(circle at 15% 20%, rgba(6, 182, 212, 0.07) 0%, transparent 40%),
-    radial-gradient(circle at 85% 75%, rgba(139, 92, 246, 0.06) 0%, transparent 45%),
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
-  -webkit-font-smoothing: antialiased;
+  overflow-y: auto;
+}
+
+button,
+input,
+select {
+  font: inherit;
 }
 
 #root {
-  width: 100%;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-base);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+a {
+  color: inherit;
 }
 
-/* Badges & Buttons Utility */
-.glass-panel {
-  background: var(--bg-glass);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
-  box-shadow: var(--shadow-card);
-}
-
-.mono {
-  font-family: var(--font-mono);
-}
-
-/* Animations */
-@keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.05); opacity: 0.3; }
-  100% { transform: scale(0.95); opacity: 0.8; }
-}
-
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.spinning {
-  animation: spin-slow 1s linear infinite;
-}
-
-.pulse-anim {
-  animation: pulse-ring 2s ease-in-out infinite;
+h1,
+h2,
+h3,
+p {
+  margin: 0;
 }
