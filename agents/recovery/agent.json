@@ -1,7 +1,10 @@
 {
+  "stage": "recovery",
   "agent_id": "recovery-vishruth@1",
   "module": "agents.recovery.app",
   "name": "Recovery Manager",
   "owner": "@vishruth-16",
+  "mode": "inproc",
+  "url": "http://localhost:8105",
   "description": "FBA fee reconciliation engine enforcing tenancy isolation and tri-state audits via Gemini."
 }
