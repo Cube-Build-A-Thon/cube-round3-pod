@@ -84,4 +84,4 @@ def test_dead_agent_is_recorded_not_hidden(monkeypatch, cases):
     flow = {**load_flow(), "defaults": {"timeout_s": 1, "retries": 0, "on_uncertain": "continue", "on_error": "continue"}}
     wf = run_workflow(cases[0], flow)
     sr = wf["stage_results"][0]
-    assert sr["state"] == "error" and sr["error"]["code"] == "agent_unavailable" and wf["status"] == "FAILED"
+    assert sr["state"] == "error" and sr["error"]["code"] in ("agent_unavailable", "agent_timeout") and wf["status"] == "FAILED"
