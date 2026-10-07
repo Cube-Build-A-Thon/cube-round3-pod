@@ -1,0 +1,11 @@
+Round 2 Source Repository: https://github.com/upeshchowdary/cube26-rtn-0045-upeshchowdary
+Commit SHA: f9b143e4e63d74ed052cf8732e38a7c1cba9a3d8
+Copy Date: 2026-10-06 (UTC)
+
+Copied Directories (byte-identical, excluding __pycache__ and caches):
+1. agent/src/returns_manager/ -> agents/returns/r2/agent/src/returns_manager/
+2. agent/prompts/ -> agents/returns/r2/agent/prompts/
+3. reference/ -> agents/returns/r2/reference/
+
+Total Files: 214
+Total Size: ~1.33 MB
