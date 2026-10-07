@@ -1,7 +1,7 @@
 {
-  "agent_id": "recovery-vishruth@1",
-  "name": "Recovery Manager",
-  "description": "FBA fee reconciliation engine enforcing tenancy isolation and tri-state audits via Gemini 1.5 Flash.",
+  "agent_id": "recovery-stub@0",
   "module": "agents.recovery.app",
-  "owner": "@vishruth-16"
+  "name": "Recovery Manager",
+  "owner": "@vishruth-16",
+  "description": "FBA fee reconciliation engine enforcing tenancy isolation and tri-state audits via Gemini."
 }
