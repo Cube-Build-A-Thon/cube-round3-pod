@@ -17,6 +17,7 @@ from shared.utils.stubs import STUB_MODEL, effective_verdict, previous
 STAGE = "recovery"
 AGENT_ID = "recovery-vishruth@1"
 MODEL_NAME = "gemini-1.5-flash"
+MODEL_INFO = {"name": "gemini-1.5-flash", "version": "1.5", "provider": "google"}
 
 # Configure Gemini (Pulls from pod's environment variables)
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
@@ -41,6 +42,9 @@ class RecoveryEvidenceRecord(BaseModel):
 class RecoveryAuditEngine:
     def __init__(self, api_key: str):
         self.api_key = api_key
+        if not api_key:
+            self.model = None
+            return
         try:
             genai.configure(api_key=api_key)
             self.model = genai.GenerativeModel(
@@ -169,7 +173,7 @@ def position(line: dict, request: dict) -> tuple[str, str, list[str]]:
     
     # Map the engine's rich assessment back into the exact Tri-State string expected by the stub
     pos = rec.outcome.get("assessment", "SILENT")
-    if pos == "DUPLICATE_CHARGE":
+    if pos in ("DUPLICATE_CHARGE", "CONTRADICTED", "CONTRADICTS"):
         pos = "CONTRADICTS"
     elif pos in ("ALREADY_REIMBURSED", "UNCERTAIN"):
         pos = "SILENT"
@@ -213,7 +217,7 @@ def handle(request: dict) -> dict:
     outcome = "claim_recommended" if claim else ("insufficient_evidence" if silent else "no_claim")
     
     record = build_record(
-        request, agent_id=AGENT_ID, record_id=f"RCY-{s['subject_id']}", model=MODEL_NAME,
+        request, agent_id=AGENT_ID, record_id=f"RCY-{s['subject_id']}", model=MODEL_INFO,
         captured_at=max((l["posted_date"] + "T00:00:00Z" for l in lines), default=utcnow()),
         checks=checks, outcome=outcome, verdict=verdict,
         needs_human=False,
