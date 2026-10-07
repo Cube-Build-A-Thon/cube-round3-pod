@@ -83,3 +83,4 @@ def test_pack_replay_fixture_uncertain_occlusion():
     for c in out["evidence"]["checks"]:
         assert c["verdict"] == "UNCERTAIN"
         assert c.get("uncertain_reason") is not None
+

@@ -13,3 +13,4 @@
 4. **Occlusion & Visibility Guard**: Flags partial or severe occlusion (e.g. kraft paper, bubble wrap) as `UNCERTAIN` to prevent hallucinated seals.
 5. **Fail-Open Strategy**: Concurrency/network timeout guard returning `pending` with `UNCERTAIN` verdict, ensuring continuous warehouse conveyor throughput without unhandled crashes.
 6. **Held-Out Evaluation Suite**: 50 dual-human labeled fixtures with benchmark metrics ($\kappa = 0.88$, 95.45% accuracy, 1,845 ms average latency).
+

@@ -90,3 +90,4 @@ def test_parse_order_lines():
     text = "SKU-PUZZLE-500:1;SKU-BOTTLE-750:2"
     parsed = parse_order_lines(text)
     assert parsed == [{"sku": "SKU-PUZZLE-500", "quantity": 1}, {"sku": "SKU-BOTTLE-750", "quantity": 2}]
+

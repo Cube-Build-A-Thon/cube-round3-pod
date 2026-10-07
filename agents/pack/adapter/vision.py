@@ -226,3 +226,4 @@ def extract_pack_vision(
         },
         "latency_ms": latency_ms,
     }
+
