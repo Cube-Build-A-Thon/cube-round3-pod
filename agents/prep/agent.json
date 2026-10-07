@@ -1,10 +1,10 @@
 {
   "stage": "prep",
   "agent_id": "prep-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "owner": "@Manideep667320",
   "mode": "inproc",
   "url": "http://localhost:8102",
   "module": "agents.prep.app",
-  "implementation": "organiser-stub",
+  "implementation": "Deterministic Amazon Rules 101-601 engine with batched multimodal VLM inspection, bounding-box visual grounding, and fail-open resilience",
   "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
 }
