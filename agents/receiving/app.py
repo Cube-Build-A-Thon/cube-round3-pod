@@ -1,9 +1,12 @@
 """Receiving Manager — Round 3 adapter over the Round 2 judgment core.
 
 Contract rules honoured here (EVIDENCE-CONTRACT.md):
-- Same request_id in -> same record_id out (hash scheme, resume-safe).
+- Same request_id in -> same record_id out, on every path (pending or completed).
 - Fail open: unresolvable captures or model failure -> pending record, never a crash.
 - Tenancy: unknown subject or wrong org -> LookupError -> 404, never a cross-tenant answer.
+- Security: input refs are contract identifiers — absolute paths, drive letters and
+  '..' traversal are rejected BEFORE any filesystem access; reads stay inside the
+  authorized capture directory (data/input).
 - captured_at never silently "now" (source recorded in payload).
 - A check that does not apply is omitted; every UNCERTAIN carries a reason.
 """
@@ -12,15 +15,16 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from shared.utils import sample_data
-from shared.utils.records import (build_output, build_record, check, pending_output,
-                                  rollup, utcnow)
+from shared.utils.records import (build_output, build_record, check,
+                                  error_obj, rollup, utcnow)
 from shared.utils.server import make_app
 
-from .core.config import CFG, REPO_ROOT
+from .core.config import CFG, DATA_INPUT
 from .core.engine import run_engine
+from .core.extraction.service import PROMPT_VERSION
 from .core.models import POLineItem, CheckContext, CheckResult
 
 STAGE = "receiving"
@@ -28,7 +32,6 @@ AGENT_ID = "receiving-manager@1.0.0"
 VERSION = "1.0.0"
 
 REGISTRY = Path(__file__).resolve().parent / "fixtures" / "units.json"
-DATA_INPUT = REPO_ROOT / "data" / "input"
 
 REASON_MAP = {"INSUFFICIENT_EVIDENCE": "insufficient_evidence", "OCCLUSION": "occluded",
               "LOW_IMAGE_QUALITY": "poor_image", "CONFLICTING_EVIDENCE": "conflicting_evidence",
@@ -37,6 +40,58 @@ DAMAGE_VOCAB = {"tear_or_open": "tears", "crushing": "crushing", "water": "water
                 "dent": "dent", "other": "other", "none": "none"}
 
 
+# ---------------------------------------------------------------- security
+def _safe_rel(ref: str) -> bool:
+    """A ref is a contract identifier, never a filesystem path.
+    Reject: empty, absolute forms, drive letters, '..' segments, NUL bytes."""
+    if not ref or "\x00" in ref:
+        return False
+    p = PurePosixPath(ref.replace("\\", "/"))
+    if p.is_absolute() or any(part == ".." for part in p.parts):
+        return False
+    first = p.parts[0] if p.parts else ""
+    if len(first) >= 2 and first[1] == ":":
+        return False
+    return True
+
+
+def _inside_root(candidate: Path) -> bool:
+    try:
+        resolved = candidate.resolve()
+        root = DATA_INPUT.resolve()
+        return resolved == root or root in resolved.parents
+    except OSError:
+        return False
+
+
+def _resolve_inputs(request, subject_id):
+    """Resolve each input's bytes from the authorized capture directory ONLY.
+    Unsafe refs are rejected before any filesystem access and surfaced in the
+    pending error (a rejected ref is a visible event, never a silent drop)."""
+    found, missing, rejected = [], [], []
+    for inp in request.get("inputs") or []:
+        ref = (inp.get("ref") or "").strip()
+        if not _safe_rel(ref):
+            rejected.append(ref or "<empty>")
+            continue
+        name = PurePosixPath(ref.replace("\\", "/")).name
+        candidates = [DATA_INPUT / ref,                       # canonical: ref relative to input root
+                      DATA_INPUT / subject_id / STAGE / name]  # fixture convenience
+        data = None
+        for c in candidates:
+            if c.is_file() and _inside_root(c):
+                data = c.read_bytes()
+                break
+        if data is None:
+            missing.append(ref)
+        elif inp.get("sha256") and hashlib.sha256(data).hexdigest() != inp["sha256"]:
+            missing.append(f"{ref} (sha256 mismatch)")
+        else:
+            found.append((inp, data))
+    return found, missing, rejected
+
+
+# ---------------------------------------------------------------- lookup / specs
 def load_registry() -> dict:
     if REGISTRY.exists():
         return json.loads(REGISTRY.read_text(encoding="utf-8")).get("units", {})
@@ -80,27 +135,25 @@ def _spec_of(unit, source) -> dict:
             "operator_id": r.get("operator_id"), "captured_at": r.get("captured_at")}
 
 
-def _resolve_inputs(request, subject_id):
-    """Find each input's bytes. Order: data/input/<ref>, repo/<ref>,
-    data/input/<subject_id>/receiving/<name>. Hash mismatch -> treated as missing."""
-    found, missing = [], []
-    for inp in request.get("inputs") or []:
-        ref = inp.get("ref", "")
-        cands = [DATA_INPUT / ref, REPO_ROOT / ref,
-                 DATA_INPUT / subject_id / STAGE / Path(ref).name]
-        data = next((c.read_bytes() for c in cands if c.exists()), None)
-        if data is None:
-            missing.append(ref)
-        elif inp.get("sha256") and hashlib.sha256(data).hexdigest() != inp["sha256"]:
-            missing.append(f"{ref} (sha256 mismatch)")
-        else:
-            found.append((inp, data))
-    return found, missing
-
-
+# ---------------------------------------------------------------- ids / pending
 def _record_id(request) -> str:
-    """Idempotent per the contract: hash of request_id. Resume gets a fresh id."""
+    """Idempotent per the contract: hash of request_id. Used on EVERY path —
+    pending and completed — so the same request never changes record_id
+    (review finding: the starter's RCV-PENDING-* scheme must not leak in here)."""
     return "RCV-" + hashlib.sha256(request["request_id"].encode()).hexdigest()[:12]
+
+
+def _pending(request: dict, *, code: str, message: str, retryable: bool = True) -> dict:
+    """Fail-open pending output using OUR record-id scheme (stability across
+    the pending -> completed transition for the same request_id)."""
+    rec = build_record(
+        request, agent_id=AGENT_ID, record_id=_record_id(request), captured_at=utcnow(),
+        checks=[], outcome="pending_review", reason=f"{code}: {message}",
+        model={"name": "none", "version": "0", "provider": None,
+               "prompt_version": PROMPT_VERSION, "calls": 0, "cost_usd": None},
+        status="pending" if retryable else "error", verdict="UNCERTAIN", needs_human=True,
+        error=error_obj(code, message, retryable=retryable, stage=STAGE, agent_id=AGENT_ID))
+    return build_output(rec, next_step="retry" if retryable else "review", reason=message)
 
 
 def _captured_at(request, spec):
@@ -108,9 +161,10 @@ def _captured_at(request, spec):
                       (spec.get("captured_at"), "recorded")):
         if cand:
             return cand, src
-    return utcnow(), "defaulted_to_produced_at"   # flagged in payload, never silent
+    return utcnow(), "defaulted_to_produced_at"
 
 
+# ---------------------------------------------------------------- check mapping
 def _refs_for(result, ref_of):
     out = []
     for e in result.evidence:
@@ -197,20 +251,26 @@ def _gate_rejected_checks(refs):
 def _model_info(stats):
     return {"name": "gemini",
             "version": (stats["model_ids"][0] if stats["model_ids"] else CFG.gemini_model),
-            "provider": "google", "prompt_version": "observe_carton@v2",
+            "provider": "google", "prompt_version": PROMPT_VERSION,
             "calls": stats["calls"], "cost_usd": None}   # free tier: cost honestly null
 
 
+# ---------------------------------------------------------------- entry point
 def handle(request: dict) -> dict:
     s = request["subject"]
     unit, source = _lookup(s["subject_id"], s["org_id"])        # tenancy -> 404 path
     spec = _spec_of(unit, source)
 
-    found, missing = _resolve_inputs(request, s["subject_id"])
+    found, missing, rejected = _resolve_inputs(request, s["subject_id"])
     if not found:
-        return pending_output(request, code="upstream_missing", agent_id=AGENT_ID,
-                              message=f"no resolvable captures for {s['subject_id']} "
-                                      f"(missing: {', '.join(missing) or 'no inputs supplied'})")
+        parts = []
+        if missing:
+            parts.append(f"missing: {', '.join(missing)}")
+        if rejected:
+            parts.append(f"REJECTED unsafe refs (not accessed): {', '.join(rejected)}")
+        return _pending(request, code="upstream_missing",
+                        message=f"no resolvable captures for {s['subject_id']} "
+                                f"({'; '.join(parts) or 'no inputs supplied'})")
 
     inputs_list, images, ref_of = [], [], {}
     for i, (inp, raw) in enumerate(found):
@@ -224,8 +284,8 @@ def handle(request: dict) -> dict:
     usable = [p for p in provs if (p.quality or {}).get("verdict") != "REJECTED"]
 
     if not usable and errors:
-        return pending_output(request, code="model_error", agent_id=AGENT_ID,
-                              message=f"vision extraction failed for every usable capture: {errors[0][1]}")
+        return _pending(request, code="model_error",
+                        message=f"vision extraction failed for every usable capture: {errors[0][1]}")
 
     if not usable:
         contract, summary = _gate_rejected_checks(list(ref_of.values())), None

@@ -1,9 +1,7 @@
-import io
 import time
 
 from google import genai
 from google.genai import types
-from PIL import Image
 from pydantic import ValidationError
 
 from ..config import CFG
@@ -11,27 +9,26 @@ from .base import VisionProvider, VisionRequest, VisionResponse
 
 RETRYABLE_STATUS = ("429", "RESOURCE_EXHAUSTED", "500", "503", "UNAVAILABLE", "OVERLOADED")
 
+
 class GeminiProvider(VisionProvider):
-    """Tries the primary model, then configured fallbacks. A single
-    overloaded/retired model never kills an inspection: either a fallback
-    succeeds, or the fail-open path in main.py preserves the capture."""
+    """Tries the primary model, then configured fallbacks. Input contract is
+    plain JPEG bytes: converted to an explicit Part with mime type — the
+    provider never opens or iterates images itself (review finding: the input
+    shape must match what the service passes — bytes in, bytes used)."""
     name = "gemini"
 
     def __init__(self):
-        self.client = (genai.Client(api_key=CFG.gemini_api_key)
-                       if CFG.gemini_api_key else None)
+        if not CFG.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY missing in .env")
+        self.client = genai.Client(api_key=CFG.gemini_api_key)
         self.models = [CFG.gemini_model] + CFG.gemini_fallback_models
 
     def _call(self, model: str, req: VisionRequest) -> VisionResponse:
-        images = [Image.open(io.BytesIO(raw)) for raw in req.image_bytes]
-        contents = []
-        for index, image in enumerate(images):
-            contents.extend([f"Image index {index}", image])
-        contents.append(req.prompt_text)
+        image_part = types.Part.from_bytes(data=req.image_bytes, mime_type="image/jpeg")
         t0 = time.time()
         resp = self.client.models.generate_content(
             model=model,
-            contents=contents,
+            contents=[image_part, req.prompt_text],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=req.schema_model,
@@ -45,8 +42,6 @@ class GeminiProvider(VisionProvider):
                               latency_ms=int((time.time() - t0) * 1000), tokens=tokens)
 
     def analyze(self, req: VisionRequest) -> VisionResponse:
-        if self.client is None:
-            raise RuntimeError("GEMINI_API_KEY missing in .env")
         last = None
         for model in self.models:
             for attempt in range(2):            # 2 tries per model, 2s apart
@@ -59,5 +54,4 @@ class GeminiProvider(VisionProvider):
                     if not any(s in str(e) for s in RETRYABLE_STATUS):
                         raise                   # non-retryable (bad key, 404): fail fast
                 time.sleep(2)
-            # -> next model in the chain
         raise last

@@ -24,3 +24,6 @@ class Config:
     prompts_dir: Path = AGENT_DIR / "prompts"
 
 CFG = Config()
+
+# Input capture root: refs resolve ONLY inside this directory (see app._safe_rel)
+DATA_INPUT = Path(os.environ.get("INPUT_DIR", str(REPO_ROOT / "data" / "input")))
