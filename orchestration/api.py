@@ -14,16 +14,34 @@ from __future__ import annotations
 import os
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+import json
 
 from shared.utils import sample_data
 
 from .clients import HttpClient, client_for, load_manifest
-from .orchestrator import apply_override, bundle, default_flow_path, flow_stages, load_flow, resume, run_workflow
+from .orchestrator import ROOT, apply_override, bundle, default_flow_path, flow_stages, load_flow, resume, run_workflow
 from .store import EvidenceConflict, FileStore
 
 app = FastAPI(title="CUBE Round 3 orchestrator")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 FLOW = os.environ.get("ORCH_FLOW") or default_flow_path()
 STORE = FileStore()
+
+
+@app.get("/cases")
+def list_cases() -> list[dict]:
+    cases_file = ROOT / "data" / "sample" / "cases.json"
+    if cases_file.exists():
+        return json.loads(cases_file.read_text())
+    return []
 
 
 @app.get("/health")

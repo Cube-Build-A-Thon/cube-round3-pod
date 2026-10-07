@@ -1,10 +1,10 @@
 {
   "stage": "returns",
-  "agent_id": "returns-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "returns-manager-rtn0045@2",
+  "owner": "@upeshchowdary",
   "mode": "inproc",
   "url": "http://localhost:8104",
   "module": "agents.returns.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Round 2 Returns Manager pipeline (Gemini vision session + deterministic validation, identity fusion, completeness, Amazon-condition grading and rules engine) behind a Round 3 adapter; replay cassettes in CI, live Gemini on demand",
+  "notes": "Real captures and replay cassettes configured for demo units (UNIT-0016, UNIT-0021, UNIT-0014, UNIT-0038, UNIT-0092, UNIT-0054); all other units fail open as no_return_photo."
 }
