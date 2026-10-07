@@ -1,10 +1,10 @@
 {
   "stage": "receiving",
-  "agent_id": "receiving-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "receiving-manager-rcv0138@2",
+  "owner": "@KiranTejz20005",
   "mode": "inproc",
   "url": "http://localhost:8101",
   "module": "agents.receiving.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Round 2 Receiving Manager pipeline (Multi-parameter visual perception + Deterministic Decision Engine, strict UNCERTAIN handling, and multi-provider fallback) behind a Round 3 adapter",
+  "notes": "Ported from cube26-rcv-0138-kirantejz20005. Evaluates inbound shipments against PO specifications and reference standards with evidence-backed audit checks and deterministic business rules."
 }
