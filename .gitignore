@@ -10,3 +10,5 @@ venv/
 out/
 .pytest_cache/
 *.egg-info/
+.cache/
+scripts/diag_dead_port.py
