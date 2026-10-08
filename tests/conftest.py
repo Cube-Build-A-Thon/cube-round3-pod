@@ -26,7 +26,9 @@ def applies(stage: str, case: dict) -> bool:
 
 
 def make_input(stage: str, case: dict, previous=None, overrides=None) -> dict:
+    from orchestration.orchestrator import discover_inputs
     wf = f"WF-{case['org_id']}-{case['unit_id']}"
     return {"schema_version": "1.0", "request_id": f"{wf}:{stage}", "workflow_id": wf, "stage": stage,
             "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"], "route": case["route"]},
-            "inputs": [], "previous_evidence": previous or [], "context": {"overrides": overrides or [], "case": case}}
+            "inputs": discover_inputs(case["unit_id"], stage),
+            "previous_evidence": previous or [], "context": {"overrides": overrides or [], "case": case}}
