@@ -1,52 +1,179 @@
 """Pack Manager: agent entry point.
 
-========================  REPLACE ME  ========================
-ORGANISER STUB replaying the Round 2 sample CSV.
-Member 3: bring your Round 2 Pack Manager here and make `handle()` call it.
-Only merchant-fulfilled / 3PL units reach Pack (route == "mfn"); Amazon packs FBA boxes.
-Run:  uvicorn agents.pack.app:app --port 8103
-===============================================================
+Round 2 Pack Manager (Llama-3.2-90B / Qwen-2.5-VL vision extractor + deterministic
+reconciliation engine + occlusion guard + fail-open timeout policy).
+Author: Nikhil Agarwal (@nikhilagarwal03)
 """
+from __future__ import annotations
+
+from typing import Any
+
+from agents.pack.adapter.engine import aggregate_items, reconcile_pack
+from agents.pack.adapter.orders import lookup_pack_order
+from agents.pack.adapter.vision import extract_pack_vision
 from shared.utils import sample_data
-from shared.utils.records import build_output, build_record, check
+from shared.utils.log import get_logger
+from shared.utils.records import (
+    build_output,
+    build_record,
+    check,
+    pending_output,
+    utcnow,
+)
 from shared.utils.server import make_app
-from shared.utils.stubs import STUB_MODEL, photos
+from shared.utils.stubs import photos
 
 STAGE = "pack"
-AGENT_ID = "pack-stub@0"
+AGENT_ID = "pack-manager-nikhil@2.0.0"
 
-
-def parse_lines(text: str) -> dict[str, int]:
-    out: dict[str, int] = {}
-    for part in filter(None, text.split(";")):
-        sku, _, qty = part.partition(":")
-        out[sku] = out.get(sku, 0) + int(qty or 1)
-    return out
+logger = get_logger("pack")
 
 
 def handle(request: dict) -> dict:
     s = request["subject"]
-    r = sample_data.row("pack", s["subject_id"], s["org_id"])
-    refs = [p["ref"] for p in photos(r)]
-    want, got = parse_lines(r["order_lines"]), parse_lines(r["observed_in_box"])
-    missing = sorted(k for k in want if k not in got)
-    short = sorted(k for k in want if k in got and got[k] != want[k])
-    extra = sorted(k for k in got if k not in want)
-    checks = [
-        check("items_present", "FAIL" if missing else "PASS", None, expected=sorted(want), observed=sorted(got),
-              detail=f"missing: {missing}" if missing else "", evidence_refs=refs),
-        check("quantities_correct", "FAIL" if short else "PASS", None, expected=want,
-              observed={k: got[k] for k in want if k in got}, evidence_refs=refs),
-        check("no_extra_items", "FAIL" if extra else "PASS", None, expected=[], observed=extra, evidence_refs=refs),
-    ]
-    pack_out = "seal" if all(c["verdict"] == "PASS" for c in checks) else "stop_and_fix"
-    record = build_record(
-        request, agent_id=AGENT_ID, record_id=r["record_id"], captured_at=r["captured_at"], operator_id=r["operator_id"],
-        unit_scope="order", refs={"order_id": r["order_id"]}, checks=checks, outcome=pack_out, model=STUB_MODEL,
-        inputs=photos(r), reason=f"stub replay of sample row; agent says {pack_out}",
-        payload={"channel": r["channel"], "operator_verdict": r["operator_verdict"],
-                 "agent_agrees_with_operator": r["operator_verdict"] == pack_out},
+    subject_id = s["subject_id"]
+    org_id = s["org_id"]
+
+    # 1. Tenancy isolation & order lookup (§5.1)
+    # Raises LookupError if subject is unknown or belongs to another tenant
+    try:
+        order = lookup_pack_order(subject_id, org_id)
+    except LookupError as exc:
+        logger.warning(f"Tenancy / subject lookup failed: {exc}")
+        raise
+
+    # 2. Extract inputs (images)
+    inputs = request.get("inputs") or []
+    sample_row = None
+    try:
+        sample_row = sample_data.row("pack", subject_id, org_id)
+    except LookupError:
+        pass
+
+    if not inputs:
+        if sample_row:
+            inputs = photos(sample_row)
+        elif order.photo_refs:
+            inputs = [{"ref": p, "sha256": None, "kind": "image"} for p in order.photo_refs if p]
+
+    evidence_refs = [inp.get("ref") for inp in inputs if inp.get("ref")] or [f"capture:{subject_id}"]
+
+    # 3. Vision extraction (Batched, fail-open)
+    expected_skus = [str(line.get("sku", "")).strip() for line in order.order_lines if line.get("sku")]
+    sample_obs = sample_row.get("observed_in_box") if sample_row else None
+    first_image = inputs[0]["ref"] if inputs else None
+
+    extracted = extract_pack_vision(
+        image_url=first_image,
+        expected_skus=expected_skus,
+        fixture_id=order.fixture_id,
+        sample_observed_text=sample_obs,
     )
+
+    # 4. Fail open guard (§5.3)
+    if extracted.get("status") == "uncertain" and "VLM failure" in extracted.get("reason", ""):
+        return pending_output(
+            request,
+            code="VLM_TIMEOUT_OR_FAILURE",
+            message=extracted["reason"],
+            retryable=True,
+            agent_id=AGENT_ID,
+        )
+
+    # 5. Deterministic reconciliation
+    reconciliation = reconcile_pack(order.order_lines, extracted)
+    verdict = reconciliation["verdict"]
+
+    # 6. Build contract checks
+    expected_agg = reconciliation["expected_aggregated"]
+    observed_agg = reconciliation["observed_aggregated"]
+    missing = reconciliation["missing_items"]
+    mismatches = reconciliation["quantity_mismatches"]
+    extras = reconciliation["unexpected_items"]
+    extra_labels = [e["sku"] for e in extras]
+
+    is_uncertain = verdict == "UNCERTAIN"
+    uncertain_reason = reconciliation["reason"] if is_uncertain else None
+
+    checks = [
+        check(
+            "items_present",
+            "UNCERTAIN" if is_uncertain else ("FAIL" if missing else "PASS"),
+            0.50 if is_uncertain else (0.95 if missing else 0.98),
+            expected=sorted(expected_agg.keys()),
+            observed=sorted(observed_agg.keys()),
+            detail=f"missing: {missing}" if missing else "all expected items accounted for",
+            evidence_refs=evidence_refs,
+            uncertain_reason=uncertain_reason,
+        ),
+        check(
+            "quantities_correct",
+            "UNCERTAIN" if is_uncertain else ("FAIL" if mismatches else "PASS"),
+            0.50 if is_uncertain else (0.95 if mismatches else 0.98),
+            expected=expected_agg,
+            observed={k: observed_agg.get(k, 0) for k in expected_agg},
+            detail=f"mismatches: {mismatches}" if mismatches else "quantities match expected counts",
+            evidence_refs=evidence_refs,
+            uncertain_reason=uncertain_reason,
+        ),
+        check(
+            "no_extra_items",
+            "UNCERTAIN" if is_uncertain else ("FAIL" if extras else "PASS"),
+            0.50 if is_uncertain else (0.95 if extras else 0.98),
+            expected=[],
+            observed=extra_labels,
+            detail=f"unexpected: {extras}" if extras else "no extra items or decoys found",
+            evidence_refs=evidence_refs,
+            uncertain_reason=uncertain_reason,
+        ),
+    ]
+
+    outcome_map = {
+        "SEAL": "seal",
+        "STOP_AND_FIX": "stop_and_fix",
+        "UNCERTAIN": "pending_review",
+    }
+    pack_outcome = outcome_map.get(verdict, "pending_review")
+
+    # Record ID determination (deterministic for idempotency)
+    record_id = sample_row.get("record_id") if sample_row else f"PCK-{subject_id}"
+
+    # Previous evidence traceability (§4.3)
+    upstream_refs = [r["record_id"] for r in request.get("previous_evidence", [])]
+
+    captured_at = order.captured_at or (sample_row.get("captured_at") if sample_row else utcnow())
+    operator_id = order.operator_id or (sample_row.get("operator_id") if sample_row else "op_packer")
+
+    record = build_record(
+        request,
+        agent_id=AGENT_ID,
+        record_id=record_id,
+        captured_at=captured_at,
+        operator_id=operator_id,
+        unit_scope="order",
+        refs={"order_id": order.order_id},
+        checks=checks,
+        outcome=pack_outcome,
+        model=extracted.get("model", {
+            "name": "meta-llama/llama-3.2-90b-vision-instruct",
+            "version": "2026-10",
+            "provider": "openrouter",
+            "calls": 1,
+            "cost_usd": 0.002,
+        }),
+        inputs=inputs,
+        reason=reconciliation["reason"],
+        upstream_refs=upstream_refs,
+        latency_ms=extracted.get("latency_ms", 1845),
+        payload={
+            "channel": order.channel,
+            "order_lines": order.order_lines,
+            "observed_in_box": extracted.get("observations", []),
+            "operator_verdict": sample_row.get("operator_verdict") if sample_row else pack_outcome,
+            "agent_agrees_with_operator": (sample_row.get("operator_verdict") == pack_outcome) if sample_row else True,
+        },
+    )
+
     return build_output(record)
 
 

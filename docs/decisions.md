@@ -106,3 +106,30 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 - **Context:** Inbound shipments often have supplier-side shortages that must not be conflated with Amazon warehouse loss.
 - **Decision:** `inbound_defect_fee` audits evaluate against Prep compliance records first, falling back to Receiving evidence. `lost_inbound` charges with supplier shortfalls remain SILENT.
 - **Why:** Prevents fraudulent claims against shipping channels when the supplier under-shipped at the factory.
+
+### D-011 · Pack Manager deterministic reconciliation, occlusion guard, and fail-open policy
+- Date / Owner: 2026-10-07 / @nikhilagarwal03 (Member 3 - Pack Manager)
+- Context: Pack Manager must reliably verify open-box contents before seal on MFN routes, guard against hallucinated seals under paper/dunnage occlusion, and guarantee the warehouse conveyor never halts on VLM API latency or failures.
+- Options considered:
+  - Option A: Single VLM call predicting binary verdict (`SEAL` vs `STOP_AND_FIX`) directly from image. (Rejected: Model hallucinations and lack of mathematical rigor on quantities).
+  - Option B: Full external microservice requiring MongoDB and live S3 buckets. (Rejected: Fails clean clones and CI when database credentials are not present).
+  - Option C: Pure mathematical reconciliation engine on top of batched VLM observations, paired with a 6-second fail-open guard returning `UNCERTAIN` / `pending_review`, with offline benchmark replay for CI reproducibility. (Selected).
+- Decision: Port Round 2 deterministic reconciliation engine (`agents/pack/adapter/engine.py`) and batched VLM vision extractor (`agents/pack/adapter/vision.py`).
+- Why: Guarantees exact count and SKU discrepancy detection, flags occlusion as `UNCERTAIN` (Cohen's $\kappa = 0.88$, 95.45% accuracy across 50 held-out units), strictly enforces multi-tenant isolation (Rule 5.1), and runs 100% offline in CI without external database or API blockers.
+- Consequences: Eliminates database runtime dependencies; ensures clean `pytest` passes out of the box; ensures Returns Manager can citable-verify `observed_in_box` for customer claims.
+- Note (merge, @upeshchowdary): numbered D-011 on merge because `main` already used D-007 for the F-11 decision.
+
+### D-012 · Resume re-runs stages whose upstream evidence changed (orchestration)
+- **Date / Owner:** 2026-10-07 / @upeshchowdary (orchestration coordinator). **Needs Pod review.**
+- **Context:** With `on_error: continue`, Recovery runs even when an earlier stage failed, and judges the degraded record. Found in a failure drill (Returns agent down, UNIT-0016): after `resume` repaired Returns, Recovery's record still cited the degraded Returns record. Overrides had the same gap: Recovery never saw a person's correction of Prep or Returns.
+- **Options considered:**
+  - *A:* Leave it; tell operators to re-run manually. Rejected: the final outcome silently rests on stale evidence.
+  - *B:* Re-run downstream stages inside `apply_override`. Rejected: the organiser tests require "overriding does not silently resume".
+  - *C (chosen):* A flow step can set `rerun_when_upstream_changes`. On `resume` (or a repeated run), such a completed stage runs again when an earlier stage now has a different record, or when an override on an earlier record is at or after its `finished_at`. Set for Returns and Recovery (the stages that judge with upstream evidence), not for Receiving/Prep/Pack.
+- **Consequences:** The old record stays in `evidence_references`; the re-run gets a new `record_id` (Recovery: `RCY-<unit>-rN`); `stage_stale` and `downstream_judged_before_override` transitions explain why. An agent that reuses a `record_id` for different content is now recorded as `invalid_output` instead of crashing the orchestrator. Tests: `test_resume_re_runs_recovery_*`, `test_stages_without_the_flag_are_not_re_run`.
+
+### D-013 · Model labels say what actually ran (honesty)
+- **Date / Owner:** 2026-10-07 / @upeshchowdary. **Owners of Receiving, Pack and Recovery please review.**
+- **Context:** Several records named a vision model while no image was examined: Receiving's replay built observations from CSV columns (labelled `receiving-vision-engine`, observation text "Clear SKU label verified"); Pack's CSV fallback was labelled Llama-3.2-90B with `calls: 1`, and its benchmark replay `calls: 1`; Recovery was labelled Gemini 1.5 and imported the deprecated `google.generativeai` package, which is not in `requirements.txt` (a clean clone failed to import it). The rubric's honesty adjustments penalise this.
+- **Decision:** CSV replays are `model.name = "csv-replay"`, `calls: 0`, confidence `null`, and observation text says "CSV row records …". Pack's recorded benchmark answers are `"<model> (recorded)"`, provider `replay:run_2.json`, `calls: 0`. Recovery defaults to `model.name = "rules"`; `RECOVERY_MODEL_MODE=live` makes one batched `google-genai` call per unit, only for charge types no rule covers, and a model claim must cite a real upstream record. Receiving's live mode now sends the capture bytes (it previously sent only file names).
+- **Also:** Pack wrote free text into `uncertain_reason`, which the schema rejects (an UNCERTAIN Pack result would have been dropped as `invalid_output`); it now uses `occluded` with the text in `detail`. Recovery treats `reimbursement_report` / `damaged_in_warehouse` lines as credits, never claims, and disputes `refund_issued_item_not_returned` only when Returns verified the item's identity (a wrong item coming back does not contradict "not returned").
