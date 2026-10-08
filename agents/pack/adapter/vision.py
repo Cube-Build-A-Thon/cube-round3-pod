@@ -18,7 +18,9 @@ import httpx
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_RESULTS_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "run_2.json"
 
-DEFAULT_MODEL_NAME = "meta-llama/llama-3.2-90b-vision-instruct"
+DEFAULT_MODEL_NAME = "meta-llama/llama-3.2-90b-vision-instruct"  # OpenRouter id (the Round 2 benchmark model)
+# Groq does not serve Llama 3.2 Vision; this is its image-capable model. PACK_MODEL_NAME overrides either default.
+GROQ_DEFAULT_MODEL_NAME = "qwen/qwen3.8-27b"
 DEFAULT_PROVIDER = "openrouter"
 VLM_TIMEOUT_S = 6.0
 
@@ -141,8 +143,8 @@ def extract_pack_vision(
     api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
     if api_key and image_url and (image_url.startswith("http://") or image_url.startswith("https://") or image_url.startswith("data:")):
         endpoint = "https://openrouter.ai/api/v1/chat/completions" if os.environ.get("OPENROUTER_API_KEY") else "https://api.groq.com/openai/v1/chat/completions"
-        model_name = os.environ.get("PACK_MODEL_NAME", DEFAULT_MODEL_NAME)
         provider = "openrouter" if os.environ.get("OPENROUTER_API_KEY") else "groq"
+        model_name = os.environ.get("PACK_MODEL_NAME") or (DEFAULT_MODEL_NAME if provider == "openrouter" else GROQ_DEFAULT_MODEL_NAME)
 
         try:
             payload = {
@@ -187,7 +189,7 @@ def extract_pack_vision(
                             "version": "2026-10",
                             "provider": provider,
                             "calls": 1,
-                            "cost_usd": 0.003,
+                            "cost_usd": None,  # not measured; token usage is in the provider response
                         },
                         "latency_ms": latency_ms,
                     }
