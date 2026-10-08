@@ -1,44 +1,55 @@
 # agents/prep/  ·  Prep Manager
 
-**Owner:** Member 2 (Prep Manager; none in Specialist Pods)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
+**Owner:** jayani1502 (`@jayani1502`)  
+**Status:** Integrated Production Agent (Round 3)  
+**Implementation:** Pure Python 3.11+ Deterministic FBA Inspection Engine  
+**Provenance:** Ported from `jayani1502/cube26-prp-0206-jayani1502` (see `PROVENANCE.md`)
 
-> **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
+---
 
-| | |
-|---|---|
-| **Reads (inputs)** | Photos of the prepped unit and the work order |
-| **Reads (previous evidence)** | Receiving |
-| **Produces** | per-requirement compliance verdicts, plus measured weight/dimensions if you can |
-| **Recommended `check_key`s** | `polybag_sealed, suffocation_warning, fnsku_label_placement, original_barcode_covered, expiry_legible, handling_marks` |
-| **`decision.outcome` values** | `compliant, non_compliant, pending_review` |
+## 1. Overview
+The **Prep Manager** is the dedicated compliance verification engine for Fulfillment by Amazon (FBA) inbound shipments. Operating directly between the Receiving stage and downstream Recovery/Pack stages, it executes multi-check micro-inspections against official Amazon FBA carrier packaging standards.
 
-**Specialist Pods have no Prep Manager: this folder is unused there** (the Specialist flow skips it). For Standard Pods: Recovery has asked Prep to record measured weight and dimensions in `payload.measurements`, because most sample fee lines are weight-tier fees with no evidence (finding F-07, see [`docs/decisions.md`](../../docs/decisions.md)). Look up Amazon's published prep requirements; do not infer them from the sample CSV. Your cost per check has to fit inside $0.40–$1.10 per unit.
-
-## Where your code goes
-
-```text
-agents/prep/
-├── app.py          ← expose  handle(agent_input: dict) -> dict  (an Agent Output). Keep `app = make_app(...)` to serve over HTTP.
-├── agent.json      ← stage · agent_id · owner · mode (inproc | http) · url · an honest `implementation` description
-├── PROVENANCE.md   ← your Round 2 repo URL + commit this came from (create it)
-├── README.md       ← this file, rewritten
-└── …               ← your Round 2 code, prompts, rules, fixtures
+```
+Agent Input ──▶ [ agents.prep.app:handle ] ──▶ Agent Output (Evidence Record: PRP-xxxx)
 ```
 
-## Integrating, in order
+## 2. Capabilities & Innovations
+1. **Multi-Check Micro-Inspections:** Evaluates 8 discrete FBA packaging rules:
+   - `polybag_sealed`: 360° perimeter seal verification (§2.2).
+   - `suffocation_warning`: Legibility and warning text verification for polybag openings $\ge$ 5 inches (§2.3).
+   - `fnsku_label_placement`: Smooth, flat placement avoiding seams, edges, or curves (§3.2).
+   - `original_barcode_covered`: Manufacturer UPC/EAN masked by opaque sticker (§3.4).
+   - `expiry_legible`: Expiration date format and visibility through polybag (§4.1).
+   - `handling_marks`: Presence of required Fragile / This Side Up exterior stickers (§4.2).
+2. **P0 Security & Contract Hardening:**
+   - **S1 Multi-Tenant Isolation:** Validates `subject.org_id` against authorized tenant context; refuses cross-tenant requests with `LookupError` (HTTP 404).
+   - **D1 Photo Boundary Validation:** Validates all `photo_index` references against provided inputs; clamps out-of-bounds citations to `verdict: UNCERTAIN`.
+   - **S2 Trusted Criteria:** Strips caller-supplied override flags; loads product criteria strictly from server-side catalog/work orders.
+   - **C1 Canonical Record ID:** Emits strictly prefixed `PRP-...` record IDs.
+3. **Unplanned FBA Fee Defense Pack (`dispute_defense_pack`):**
+   - Automatically compiles pre-shipment cryptographic dispute dossiers inside `evidence.payload` to help sellers contest unwarranted Amazon unplanned prep fees.
+4. **Pharmaceutical & Sensitive Item Safety Valve:**
+   - Automatically detects ingestibles, vitamins, pharmaceuticals, baby products, and cosmetics. Drops to `verdict: UNCERTAIN` with `needs_human: True` if confidence $< 0.85$ or visual evidence is ambiguous.
+5. **Measurements Capture (Finding F-07 Resolution):**
+   - Records physical weight and dimensions in `payload.measurements` (`weight_g`, `length_mm`, `width_mm`, `height_mm`), enabling Recovery Manager to contest invalid weight-tier fulfillment fees.
+6. **Durable Replay Idempotency:**
+   - Atomic SQLite request cache (`out/prep/idempotency.db`) ensuring `same request_id -> identical sealed output` with zero redundant inference fees.
 
-1. Read [`INTEGRATION-GUIDE.md`](../../INTEGRATION-GUIDE.md) and [`EVIDENCE-CONTRACT.md`](../../EVIDENCE-CONTRACT.md); open [`examples/end-to-end/`](../../examples/) for a real Agent Output.
-2. In `handle()`: read `request["subject"]`, `request["inputs"]` (your captures) and `request["previous_evidence"]`; run your agent (**one batched model call per unit**); build the record with `shared.utils.records.build_record()` and wrap it with `build_output()`.
-3. **Fail open.** On a model error return `pending_output(...)`, not an exception. Never invent evidence: if you did not see it, say UNCERTAIN with an `uncertain_reason`.
-4. **Refuse other tenants.** Raise `LookupError` (HTTP 404) for a subject that is not under `subject.org_id`.
-5. Make it idempotent: the same `request_id` must yield the same `record_id`. Use the **latest override** of previous evidence (`context.overrides`).
-6. Run `pytest tests/integration/test_agent_contracts.py`, first on the stub (it passes), then on yours, **with your own fixtures**.
-7. Run the whole system: `make run` and `make test`.
+---
 
-## Run on its own
+## 3. Running & Testing
 
+### Running as an In-Process Module
+In-process execution is managed directly by the Orchestrator via `agents.prep.app:handle`.
+
+### Running as an HTTP Microservice
 ```sh
-.venv/bin/uvicorn agents.prep.app:app --port 8102
-curl localhost:8102/health
+uvicorn agents.prep.app:app --port 8102
+curl http://localhost:8102/health
 ```
-Then set `"mode": "http"` in `agent.json` if you want the orchestrator to call it over HTTP.
+
+### Running Test Verification
+```sh
+pytest tests/integration/test_agent_contracts.py -k prep
+```
