@@ -3,7 +3,7 @@
   "agent_id": "returns-manager-rtn0045@2",
   "owner": "@upeshchowdary",
   "mode": "inproc",
-  "url": "http://localhost:8104",
+  "url": "http://127.0.0.1:8104",
   "module": "agents.returns.app",
   "implementation": "Round 2 Returns Manager pipeline (Gemini vision session + deterministic validation, identity fusion, completeness, Amazon-condition grading and rules engine) behind a Round 3 adapter; replay cassettes in CI, live Gemini on demand",
   "notes": "Real captures and replay cassettes configured for demo units (UNIT-0016, UNIT-0021, UNIT-0014, UNIT-0038, UNIT-0092, UNIT-0054); all other units fail open as no_return_photo."
