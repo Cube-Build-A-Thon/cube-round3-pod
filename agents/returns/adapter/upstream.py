@@ -25,16 +25,24 @@ def reconcile_upstream(
     if pack_rec:
         consumed_refs.append(pack_rec["record_id"])
         eff_v = effective_verdict(request, pack_rec)
-        shipped_sku = pack_rec.get("subject", {}).get("refs", {}).get("sku")
+        # What actually went into the box is Pack's observation (payload.observed_in_box); subject.refs.sku is only a
+        # fallback, and Pack does not set it today. An empty observation means Pack could not see the contents.
+        observed = (pack_rec.get("payload") or {}).get("observed_in_box") or []
+        shipped_skus = sorted({str(o.get("sku", "")).strip() for o in observed if isinstance(o, dict) and o.get("sku")})
+        ref_sku = pack_rec.get("subject", {}).get("refs", {}).get("sku")
+        if not shipped_skus and ref_sku:
+            shipped_skus = [ref_sku]
         reconciliation["pack"] = {
             "record_id": pack_rec["record_id"],
             "effective_verdict": eff_v,
-            "shipped_sku": shipped_sku,
+            "shipped_skus": shipped_skus,
+            "shipped_sku_source": "observed_in_box" if observed else ("subject.refs.sku" if ref_sku else None),
             "used_as_reference": used_pack_as_reference,
         }
-        if shipped_sku and ordered_sku and shipped_sku != ordered_sku:
+        if shipped_skus and ordered_sku and ordered_sku not in shipped_skus:
             reconciliation["sku_consistent_with_order"] = False
-            reconciliation["notes"].append(f"Pack record indicates shipped SKU {shipped_sku} differs from ordered SKU {ordered_sku}")
+            reconciliation["notes"].append(
+                f"Pack record {pack_rec['record_id']} shows {', '.join(shipped_skus)} in the box, not the ordered SKU {ordered_sku}")
 
     # 2. Receiving stage
     rcv_rec = previous(request, "receiving")

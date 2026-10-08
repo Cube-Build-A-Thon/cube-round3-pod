@@ -79,7 +79,9 @@ def create_model_client(
     if mode in ("live", "record"):
         if not settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is not configured in environment or .env file")
-        live_client = GeminiModelClient(settings)
+        # Same construction as Round 2 (inspection/runtime.py, cli/batch_commands.py): the key and the timeout, not the
+        # settings object. Passing `settings` alone raised TypeError, so live and record mode never ran in Round 3.
+        live_client = GeminiModelClient(settings.gemini_api_key.get_secret_value(), settings.rm_model_timeout_s)
         if mode == "record":
             return RecordingModelClient(live_client, cassette_path), cassette_path
         return live_client, None
