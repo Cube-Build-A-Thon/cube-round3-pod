@@ -1,0 +1,1898 @@
+[
+    {
+        "fixture_id":  "1.a",
+        "category":  "Bath",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/1.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "1.b",
+        "category":  "Bath",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/1.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "1.c",
+        "category":  "Bath",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/1.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "1.d",
+        "category":  "Bath",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/1.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "2.a",
+        "category":  "Bath",
+        "defect_type":  "quantity_too_many",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/2.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "2.b",
+        "category":  "Bath",
+        "defect_type":  "quantity_stacked",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/2.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "2.c",
+        "category":  "Bath",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/2.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "2.d",
+        "category":  "Bath",
+        "defect_type":  "wrong_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/2.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-BATH-TOWEL-LIGHT-BLUE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-BATH-SOAP-LAVENDER",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.a",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.b",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.c",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.d",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "quantity_too_many",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.e",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "3.f",
+        "category":  "Apparel \u0026 Hardgoods",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/3.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-TSHIRT-WHITE",
+                                   "quantity":  2
+                               },
+                               {
+                                   "sku":  "SKU-HARDGOOD-MUG-BLACK",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-BOOK-PAPERBACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "4.a",
+        "category":  "Grocery",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "4.b",
+        "category":  "Grocery",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "4.c",
+        "category":  "Grocery",
+        "defect_type":  "quantity_too_few",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "4.d",
+        "category":  "Grocery",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "4.e",
+        "category":  "Grocery",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "4.f",
+        "category":  "Grocery",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/4.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-GROCERY-TOMATO-CAN",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-SPAGHETTI",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-GROCERY-BASIL-JAR",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "5.a",
+        "category":  "Apparel",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "5.b",
+        "category":  "Apparel",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "5.c",
+        "category":  "Apparel",
+        "defect_type":  "quantity_too_many",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "5.d",
+        "category":  "Apparel",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "5.e",
+        "category":  "Apparel",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "5.f",
+        "category":  "Apparel",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/5.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-APPAREL-HOODIE-GREY",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-APPAREL-SOCKS-BLACK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "6.a",
+        "category":  "Media",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "6.b",
+        "category":  "Media",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "6.c",
+        "category":  "Media",
+        "defect_type":  "quantity_too_few",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "6.d",
+        "category":  "Media",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "6.e",
+        "category":  "Media",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "6.f",
+        "category":  "Media",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/6.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-MEDIA-HARDCOVER-SPACE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-MEDIA-DVD",
+                                   "quantity":  2
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "7.a",
+        "category":  "Tools",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "7.b",
+        "category":  "Tools",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "7.c",
+        "category":  "Tools",
+        "defect_type":  "quantity_too_many",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "7.d",
+        "category":  "Tools",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "7.e",
+        "category":  "Tools",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "7.f",
+        "category":  "Tools",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/7.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-TOOLS-HAMMER-SILVER",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-TOOLS-TAPE-ORANGE",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "8.a",
+        "category":  "Cosmetics",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "8.b",
+        "category":  "Cosmetics",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "8.c",
+        "category":  "Cosmetics",
+        "defect_type":  "quantity_too_few",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "8.d",
+        "category":  "Cosmetics",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "8.e",
+        "category":  "Cosmetics",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "8.f",
+        "category":  "Cosmetics",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/8.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-COSMETICS-LOTION",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-CREAM",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-COSMETICS-LIPSTICK",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    },
+    {
+        "fixture_id":  "9.a",
+        "category":  "Stationery",
+        "defect_type":  "perfect_pack",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.a.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "PASS",
+                             "human_2_label":  "PASS",
+                             "consensus_label":  "PASS",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "PASS",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "9.b",
+        "category":  "Stationery",
+        "defect_type":  "missing_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.b.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "9.c",
+        "category":  "Stationery",
+        "defect_type":  "quantity_too_many",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.c.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  false,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  false,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "9.d",
+        "category":  "Stationery",
+        "defect_type":  "variant_swap",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.d.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  false,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  false,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "9.e",
+        "category":  "Stationery",
+        "defect_type":  "extra_item",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.e.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "STOP_AND_FIX",
+                             "human_2_label":  "STOP_AND_FIX",
+                             "consensus_label":  "STOP_AND_FIX",
+                             "all_items_present":  true,
+                             "quantities_correct":  true,
+                             "occlusion_state":  "NONE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "STOP_AND_FIX",
+                          "all_items_present":  true,
+                          "quantities_correct":  true,
+                          "occlusion_state":  "NONE"
+                      }
+    },
+    {
+        "fixture_id":  "9.f",
+        "category":  "Stationery",
+        "defect_type":  "severe_occlusion",
+        "image_url":  "https://[YOUR_AWS_S3_BUCKET_NAME].s3.[AWS_REGION].amazonaws.com/fixtures/9.f.jpg",
+        "expected_order":  [
+                               {
+                                   "sku":  "SKU-STATIONERY-PENCIL-CASE",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-NOTEPAD-YELLOW",
+                                   "quantity":  1
+                               },
+                               {
+                                   "sku":  "SKU-STATIONERY-MARKERS-SET",
+                                   "quantity":  1
+                               }
+                           ],
+        "ground_truth":  {
+                             "human_1_label":  "UNCERTAIN",
+                             "human_2_label":  "UNCERTAIN",
+                             "consensus_label":  "UNCERTAIN",
+                             "all_items_present":  null,
+                             "quantities_correct":  null,
+                             "occlusion_state":  "SEVERE"
+                         },
+        "labeler_a":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      },
+        "labeler_b":  {
+                          "final_verdict":  "UNCERTAIN",
+                          "all_items_present":  null,
+                          "quantities_correct":  null,
+                          "occlusion_state":  "SEVERE"
+                      }
+    }
+]

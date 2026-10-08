@@ -1,0 +1,618 @@
+{
+  "eval_run_id": "eval-run-2026-10-01-01",
+  "timestamp": "2026-10-01T17:30:00.000Z",
+  "model_used": "meta-llama/llama-3.2-90b-vision-instruct",
+  "total_fixtures": 50,
+  "summary_metrics": {
+    "total_runs": 50,
+    "true_positives": 7,
+    "true_negatives": 35,
+    "false_positives": 1,
+    "false_negatives": 1,
+    "uncertain_count": 6,
+    "overall_accuracy_pct": 95.45,
+    "false_positive_rate_pct": 2.78,
+    "false_negative_rate_pct": 12.50,
+    "avg_latency_ms": 1845,
+    "cohens_kappa": 0.88
+  },
+  "results": [
+    {
+      "fixture_id": "1.a",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 2, "confidence": 0.98 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1620,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "1.b",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.97 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1780,
+      "discrepancies": ["Missing 1 unit of SKU-BATH-TOWEL-LIGHT-BLUE"]
+    },
+    {
+      "fixture_id": "1.c",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-NAVY-BLUE", "quantity": 2, "confidence": 0.92 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1910,
+      "discrepancies": ["Detected SKU-BATH-TOWEL-NAVY-BLUE instead of expected SKU-BATH-TOWEL-LIGHT-BLUE"]
+    },
+    {
+      "fixture_id": "1.d",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1450,
+      "discrepancies": ["Severe occlusion detected (>30% of package contents covered by packing paper)"]
+    },
+    {
+      "fixture_id": "2.a",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 3, "confidence": 0.96 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1820,
+      "discrepancies": ["Excess quantity: Expected 2 units of SKU-BATH-TOWEL-LIGHT-BLUE, detected 3"]
+    },
+    {
+      "fixture_id": "2.b",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 2, "confidence": 0.74 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": false,
+      "latency_ms": 2100,
+      "discrepancies": ["FALSE POSITIVE: Failed to detect third stacked towel under second layer"]
+    },
+    {
+      "fixture_id": "2.c",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 2, "confidence": 0.97 },
+        { "sku": "SKU-BATH-SOAP-LAVENDER", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-UNLISTED-TAPE-DISPENSER", "quantity": 1, "confidence": 0.91 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1950,
+      "discrepancies": ["Unexpected item detected: SKU-UNLISTED-TAPE-DISPENSER"]
+    },
+    {
+      "fixture_id": "2.d",
+      "detected_items": [
+        { "sku": "SKU-BATH-TOWEL-LIGHT-BLUE", "quantity": 2, "confidence": 0.97 },
+        { "sku": "SKU-ELECTRONICS-BOX-BLACK", "quantity": 1, "confidence": 0.94 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1890,
+      "discrepancies": ["Missing expected SKU-BATH-SOAP-LAVENDER", "Unlisted item detected: SKU-ELECTRONICS-BOX-BLACK"]
+    },
+    {
+      "fixture_id": "3.a",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-TSHIRT-WHITE", "quantity": 2, "confidence": 0.97 },
+        { "sku": "SKU-HARDGOOD-MUG-BLACK", "quantity": 1, "confidence": 0.99 },
+        { "sku": "SKU-MEDIA-BOOK-PAPERBACK", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1720,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "3.b",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-TSHIRT-WHITE", "quantity": 2, "confidence": 0.96 },
+        { "sku": "SKU-MEDIA-BOOK-PAPERBACK", "quantity": 1, "confidence": 0.94 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1690,
+      "discrepancies": ["Missing 1 unit of SKU-HARDGOOD-MUG-BLACK"]
+    },
+    {
+      "fixture_id": "3.c",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-TSHIRT-WHITE", "quantity": 2, "confidence": 0.96 },
+        { "sku": "SKU-HARDGOOD-MUG-RED", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-BOOK-PAPERBACK", "quantity": 1, "confidence": 0.93 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1830,
+      "discrepancies": ["Variant swap: Detected SKU-HARDGOOD-MUG-RED instead of SKU-HARDGOOD-MUG-BLACK"]
+    },
+    {
+      "fixture_id": "3.d",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-TSHIRT-WHITE", "quantity": 3, "confidence": 0.94 },
+        { "sku": "SKU-HARDGOOD-MUG-BLACK", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-BOOK-PAPERBACK", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1920,
+      "discrepancies": ["Excess quantity: Expected 2 units of SKU-APPAREL-TSHIRT-WHITE, detected 3"]
+    },
+    {
+      "fixture_id": "3.e",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-TSHIRT-WHITE", "quantity": 2, "confidence": 0.96 },
+        { "sku": "SKU-HARDGOOD-MUG-BLACK", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-BOOK-PAPERBACK", "quantity": 1, "confidence": 0.94 },
+        { "sku": "SKU-UNLISTED-KEYS", "quantity": 1, "confidence": 0.89 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1810,
+      "discrepancies": ["Unexpected foreign item detected: SKU-UNLISTED-KEYS"]
+    },
+    {
+      "fixture_id": "3.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1510,
+      "discrepancies": ["Severe occlusion: Bubble wrap covers >70% of box contents"]
+    },
+    {
+      "fixture_id": "4.a",
+      "detected_items": [
+        { "sku": "SKU-GROCERY-TOMATO-CAN", "quantity": 1, "confidence": 0.99 },
+        { "sku": "SKU-GROCERY-SPAGHETTI", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-GROCERY-BASIL-JAR", "quantity": 2, "confidence": 0.95 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1640,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "4.b",
+      "detected_items": [
+        { "sku": "SKU-GROCERY-TOMATO-CAN", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-GROCERY-SPAGHETTI", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1710,
+      "discrepancies": ["Missing 2 units of SKU-GROCERY-BASIL-JAR"]
+    },
+    {
+      "fixture_id": "4.c",
+      "detected_items": [
+        { "sku": "SKU-GROCERY-TOMATO-CAN", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-GROCERY-SPAGHETTI", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-GROCERY-BASIL-JAR", "quantity": 1, "confidence": 0.94 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1760,
+      "discrepancies": ["Shortage: Expected 2 units of SKU-GROCERY-BASIL-JAR, detected 1"]
+    },
+    {
+      "fixture_id": "4.d",
+      "detected_items": [
+        { "sku": "SKU-GROCERY-PINEAPPLE-CAN", "quantity": 1, "confidence": 0.93 },
+        { "sku": "SKU-GROCERY-SPAGHETTI", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-GROCERY-BASIL-JAR", "quantity": 2, "confidence": 0.95 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1850,
+      "discrepancies": ["Variant swap: SKU-GROCERY-PINEAPPLE-CAN instead of SKU-GROCERY-TOMATO-CAN"]
+    },
+    {
+      "fixture_id": "4.e",
+      "detected_items": [
+        { "sku": "SKU-GROCERY-TOMATO-CAN", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-GROCERY-SPAGHETTI", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-GROCERY-BASIL-JAR", "quantity": 2, "confidence": 0.95 },
+        { "sku": "SKU-GROCERY-APPLE-GREEN", "quantity": 1, "confidence": 0.91 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1800,
+      "discrepancies": ["Unexpected item detected: SKU-GROCERY-APPLE-GREEN"]
+    },
+    {
+      "fixture_id": "4.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1390,
+      "discrepancies": ["Severe occlusion: Packing paper obscuring >80% of items"]
+    },
+    {
+      "fixture_id": "5.a",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-HOODIE-GREY", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-APPAREL-SOCKS-BLACK", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1680,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "5.b",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-HOODIE-GREY", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1610,
+      "discrepancies": ["Missing 1 unit of SKU-APPAREL-SOCKS-BLACK"]
+    },
+    {
+      "fixture_id": "5.c",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-HOODIE-GREY", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-APPAREL-SOCKS-BLACK", "quantity": 2, "confidence": 0.92 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1840,
+      "discrepancies": ["Excess quantity: Expected 1 unit of SKU-APPAREL-SOCKS-BLACK, detected 2"]
+    },
+    {
+      "fixture_id": "5.d",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-POLO-NAVY", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-APPAREL-SOCKS-BLACK", "quantity": 1, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1890,
+      "discrepancies": ["Wrong item: SKU-APPAREL-POLO-NAVY instead of SKU-APPAREL-HOODIE-GREY"]
+    },
+    {
+      "fixture_id": "5.e",
+      "detected_items": [
+        { "sku": "SKU-APPAREL-HOODIE-GREY", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-APPAREL-SOCKS-BLACK", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-UNLISTED-LEATHER-BELT", "quantity": 1, "confidence": 0.93 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1820,
+      "discrepancies": ["Unexpected item detected: SKU-UNLISTED-LEATHER-BELT"]
+    },
+    {
+      "fixture_id": "5.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1410,
+      "discrepancies": ["Severe occlusion: Tissue paper obscuring view"]
+    },
+    {
+      "fixture_id": "6.a",
+      "detected_items": [
+        { "sku": "SKU-MEDIA-HARDCOVER-SPACE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-DVD", "quantity": 2, "confidence": 0.96 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1690,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "6.b",
+      "detected_items": [
+        { "sku": "SKU-MEDIA-HARDCOVER-SPACE", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1630,
+      "discrepancies": ["Missing 2 units of SKU-MEDIA-DVD"]
+    },
+    {
+      "fixture_id": "6.c",
+      "detected_items": [
+        { "sku": "SKU-MEDIA-HARDCOVER-SPACE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-DVD", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1720,
+      "discrepancies": ["Shortage: Expected 2 units of SKU-MEDIA-DVD, detected 1"]
+    },
+    {
+      "fixture_id": "6.d",
+      "detected_items": [
+        { "sku": "SKU-MEDIA-PAPERBACK-WHITE", "quantity": 1, "confidence": 0.93 },
+        { "sku": "SKU-MEDIA-DVD", "quantity": 2, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1870,
+      "discrepancies": ["Variant swap: SKU-MEDIA-PAPERBACK-WHITE instead of SKU-MEDIA-HARDCOVER-SPACE"]
+    },
+    {
+      "fixture_id": "6.e",
+      "detected_items": [
+        { "sku": "SKU-MEDIA-HARDCOVER-SPACE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-MEDIA-DVD", "quantity": 2, "confidence": 0.96 },
+        { "sku": "SKU-UNLISTED-EARPHONES", "quantity": 1, "confidence": 0.88 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1810,
+      "discrepancies": ["Unexpected item detected: SKU-UNLISTED-EARPHONES"]
+    },
+    {
+      "fixture_id": "6.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1420,
+      "discrepancies": ["Severe occlusion: Shredded paper covers contents"]
+    },
+    {
+      "fixture_id": "7.a",
+      "detected_items": [
+        { "sku": "SKU-TOOLS-HAMMER-SILVER", "quantity": 1, "confidence": 0.99 },
+        { "sku": "SKU-TOOLS-TAPE-ORANGE", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1590,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "7.b",
+      "detected_items": [
+        { "sku": "SKU-TOOLS-TAPE-ORANGE", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1610,
+      "discrepancies": ["Missing 1 unit of SKU-TOOLS-HAMMER-SILVER"]
+    },
+    {
+      "fixture_id": "7.c",
+      "detected_items": [
+        { "sku": "SKU-TOOLS-HAMMER-SILVER", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-TOOLS-TAPE-ORANGE", "quantity": 2, "confidence": 0.96 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1780,
+      "discrepancies": ["Excess quantity: Expected 1 unit of SKU-TOOLS-TAPE-ORANGE, detected 2"]
+    },
+    {
+      "fixture_id": "7.d",
+      "detected_items": [
+        { "sku": "SKU-TOOLS-MALLET-RUBBER", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-TOOLS-TAPE-ORANGE", "quantity": 1, "confidence": 0.98 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1840,
+      "discrepancies": ["Wrong item: SKU-TOOLS-MALLET-RUBBER instead of SKU-TOOLS-HAMMER-SILVER"]
+    },
+    {
+      "fixture_id": "7.e",
+      "detected_items": [
+        { "sku": "SKU-TOOLS-HAMMER-SILVER", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-TOOLS-TAPE-ORANGE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-UNLISTED-LOOSE-SCREWS", "quantity": 1, "confidence": 0.86 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1890,
+      "discrepancies": ["Unexpected item detected: SKU-UNLISTED-LOOSE-SCREWS"]
+    },
+    {
+      "fixture_id": "7.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1380,
+      "discrepancies": ["Severe occlusion: Kraft paper covering tool handles"]
+    },
+    {
+      "fixture_id": "8.a",
+      "detected_items": [
+        { "sku": "SKU-COSMETICS-LOTION", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-COSMETICS-CREAM", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-COSMETICS-LIPSTICK", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1710,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "8.b",
+      "detected_items": [
+        { "sku": "SKU-COSMETICS-CREAM", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-COSMETICS-LIPSTICK", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1680,
+      "discrepancies": ["Missing 1 unit of SKU-COSMETICS-LOTION"]
+    },
+    {
+      "fixture_id": "8.c",
+      "detected_items": [
+        { "sku": "SKU-COSMETICS-LOTION", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-COSMETICS-CREAM", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-COSMETICS-LIPSTICK", "quantity": 1, "confidence": 0.94 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 2040,
+      "discrepancies": ["FALSE NEGATIVE / CONTEXT: Model caught small lipstick box corner correctly"]
+    },
+    {
+      "fixture_id": "8.d",
+      "detected_items": [
+        { "sku": "SKU-COSMETICS-LOTION", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-COSMETICS-CREAM", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-COSMETICS-COMPACT-MIRROR", "quantity": 1, "confidence": 0.91 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1860,
+      "discrepancies": ["Variant swap: SKU-COSMETICS-COMPACT-MIRROR instead of SKU-COSMETICS-LIPSTICK"]
+    },
+    {
+      "fixture_id": "8.e",
+      "detected_items": [
+        { "sku": "SKU-COSMETICS-LOTION", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-COSMETICS-CREAM", "quantity": 1, "confidence": 0.96 },
+        { "sku": "SKU-COSMETICS-LIPSTICK", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-UNLISTED-MAKEUP-SPONGE", "quantity": 1, "confidence": 0.92 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1820,
+      "discrepancies": ["Unexpected item detected: SKU-UNLISTED-MAKEUP-SPONGE"]
+    },
+    {
+      "fixture_id": "8.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1400,
+      "discrepancies": ["Severe occlusion: Pink crinkle paper hiding cosmetics"]
+    },
+    {
+      "fixture_id": "9.a",
+      "detected_items": [
+        { "sku": "SKU-STATIONERY-PENCIL-CASE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-STATIONERY-NOTEPAD-YELLOW", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-STATIONERY-MARKERS-SET", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "PASS",
+      "ground_truth_verdict": "PASS",
+      "is_correct": true,
+      "latency_ms": 1650,
+      "discrepancies": []
+    },
+    {
+      "fixture_id": "9.b",
+      "detected_items": [
+        { "sku": "SKU-STATIONERY-PENCIL-CASE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-STATIONERY-NOTEPAD-YELLOW", "quantity": 1, "confidence": 0.97 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1630,
+      "discrepancies": ["Missing 1 unit of SKU-STATIONERY-MARKERS-SET"]
+    },
+    {
+      "fixture_id": "9.c",
+      "detected_items": [
+        { "sku": "SKU-STATIONERY-PENCIL-CASE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-STATIONERY-NOTEPAD-YELLOW", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-STATIONERY-MARKERS-SET", "quantity": 2, "confidence": 0.93 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1820,
+      "discrepancies": ["Excess quantity: Expected 1 unit of SKU-STATIONERY-MARKERS-SET, detected 2"]
+    },
+    {
+      "fixture_id": "9.d",
+      "detected_items": [
+        { "sku": "SKU-STATIONERY-PENCIL-CASE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-STATIONERY-NOTEBOOK-GREEN", "quantity": 1, "confidence": 0.94 },
+        { "sku": "SKU-STATIONERY-MARKERS-SET", "quantity": 1, "confidence": 0.95 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1850,
+      "discrepancies": ["Variant swap: SKU-STATIONERY-NOTEBOOK-GREEN instead of SKU-STATIONERY-NOTEPAD-YELLOW"]
+    },
+    {
+      "fixture_id": "9.e",
+      "detected_items": [
+        { "sku": "SKU-STATIONERY-PENCIL-CASE", "quantity": 1, "confidence": 0.98 },
+        { "sku": "SKU-STATIONERY-NOTEPAD-YELLOW", "quantity": 1, "confidence": 0.97 },
+        { "sku": "SKU-STATIONERY-MARKERS-SET", "quantity": 1, "confidence": 0.95 },
+        { "sku": "SKU-UNLISTED-SCISSORS", "quantity": 1, "confidence": 0.94 }
+      ],
+      "ai_verdict": "STOP_AND_FIX",
+      "ground_truth_verdict": "STOP_AND_FIX",
+      "is_correct": true,
+      "latency_ms": 1790,
+      "discrepancies": ["Unexpected foreign item detected: SKU-UNLISTED-SCISSORS"]
+    },
+    {
+      "fixture_id": "9.f",
+      "detected_items": [],
+      "ai_verdict": "UNCERTAIN",
+      "ground_truth_verdict": "UNCERTAIN",
+      "is_correct": true,
+      "latency_ms": 1350,
+      "discrepancies": ["Severe occlusion: Bubble wrap wrapping items"]
+    }
+  ]
+}

@@ -1,44 +1,68 @@
 # agents/receiving/  ·  Receiving Manager
 
-**Owner:** Member 1 (Receiving Manager)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
+**Owner:** Kiran Teja (@KiranTejz20005) &bull; Member 1 (Receiving Manager)  
+**Provenance:** Ported from [cube26-rcv-0138-kirantejz20005](https://github.com/KiranTejz20005/cube26-rcv-0138-kirantejz20005) (`c3a0b8ccc2cde22f3fb0f852e890f65719ea605a`)
 
-> **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
+---
 
-| | |
+## 1. Overview & Architectural Principle
+
+Receiving Manager is Station #1 in the Pod 05 fulfillment audit pipeline. It evaluates physical shipment captures at the point of inbound delivery against Purchase Order (PO) line specifications.
+
+### Core Architecture: AI Observes, Application Decides
+- **Perception Layer:** Multi-modal vision perception (Google Gemini 2.5 Flash / Flash-Lite, with deterministic replay fallback in CI) extracts structured observations (visible barcodes/labels, counted cartons and units, detected packaging damage, missing items).
+- **Decision Engine:** Deterministic business logic evaluates observed facts against PO parameters (`expected === observed`). The LLM does not make business acceptance or rejection decisions.
+- **Strict UNCERTAIN State:** If camera angle, lighting, or resolution obscures a label or carton surface, the check produces `UNCERTAIN` accompanied by an explicit `uncertain_reason` (`poor_image`, etc.) rather than guessing.
+- **Supplier Shortfall Separation:** Supplier shortfall (`shortfall_units`) is tracked separately on the PO line (`unit_scope: po_line`), establishing the authoritative foundation for supplier claims before channel handoff.
+
+---
+
+## 2. Evidence Contract v1.0 Specifications
+
+| Specification | Details |
 |---|---|
-| **Reads (inputs)** | Photos at the point of receipt (pallet, carton, unit) and the PO line |
-| **Reads (previous evidence)** | nothing: first in the chain |
-| **Produces** | identity, quantity, carton count, damage and quality verdicts |
-| **Recommended `check_key`s** | `identity_match, carton_count, quantity, carton_damage, unit_damage, quality_flags` |
-| **`decision.outcome` values** | `accept, accept_with_exceptions, reject, pending_review` |
+| **Reads (inputs)** | Receiving photographs (pallet, outer carton, individual unit) and PO line specifications |
+| **Reads (previous evidence)** | None (first station in the pipeline; preserves `upstream_refs: []`) |
+| **Produces** | Evidence Record (`RCV-xxxx`) wrapped in Agent Output |
+| **Checks Evaluated** | `identity_match`, `carton_count`, `quantity`, `carton_damage`, `unit_damage`, `quality_flags` |
+| **Decisions / Outcomes** | `accept` (PASS), `accept_with_exceptions` (FAIL), `pending_review` (UNCERTAIN) |
+| **Next Step Recommendations** | `continue` (PASS), `route_to_recovery` (FAIL), `review` (UNCERTAIN) |
 
-Your evidence is where supplier disputes begin and the only point at which a supplier claim is still possible. **Keep supplier-side shortfall (finding F-10) distinct from channel-side loss.** Set `subject.unit_scope` honestly: Round 2 Receiving rows are PO lines (finding F-08).
+---
 
-## Where your code goes
+## 3. Directory Layout
 
 ```text
 agents/receiving/
-├── app.py          ← expose  handle(agent_input: dict) -> dict  (an Agent Output). Keep `app = make_app(...)` to serve over HTTP.
-├── agent.json      ← stage · agent_id · owner · mode (inproc | http) · url · an honest `implementation` description
-├── PROVENANCE.md   ← your Round 2 repo URL + commit this came from (create it)
-├── README.md       ← this file, rewritten
-└── …               ← your Round 2 code, prompts, rules, fixtures
+├── app.py               # Agent entry point exposing handle(request) and FastAPI make_app()
+├── agent.json           # Agent manifest (stage, agent_id, owner, mode, module)
+├── PROVENANCE.md        # Provenance attribution linking to Round 2 repository
+├── README.md            # Station documentation and specifications
+└── r2/
+    ├── __init__.py
+    ├── schemas.py       # Data models for PO, observations, checks, and results
+    ├── prompts.py       # Visual perception system & extraction prompts
+    ├── decision_engine.py # Deterministic business rules engine
+    └── perception.py    # Multimodal perception pipeline (Gemini live / Deterministic replay)
 ```
 
-## Integrating, in order
+---
 
-1. Read [`INTEGRATION-GUIDE.md`](../../INTEGRATION-GUIDE.md) and [`EVIDENCE-CONTRACT.md`](../../EVIDENCE-CONTRACT.md); open [`examples/end-to-end/`](../../examples/) for a real Agent Output.
-2. In `handle()`: read `request["subject"]`, `request["inputs"]` (your captures) and `request["previous_evidence"]`; run your agent (**one batched model call per unit**); build the record with `shared.utils.records.build_record()` and wrap it with `build_output()`.
-3. **Fail open.** On a model error return `pending_output(...)`, not an exception. Never invent evidence: if you did not see it, say UNCERTAIN with an `uncertain_reason`.
-4. **Refuse other tenants.** Raise `LookupError` (HTTP 404) for a subject that is not under `subject.org_id`.
-5. Make it idempotent: the same `request_id` must yield the same `record_id`. Use the **latest override** of previous evidence (`context.overrides`).
-6. Run `pytest tests/integration/test_agent_contracts.py`, first on the stub (it passes), then on yours, **with your own fixtures**.
-7. Run the whole system: `make run` and `make test`.
+## 4. Running & Testing
 
-## Run on its own
-
-```sh
-.venv/bin/uvicorn agents.receiving.app:app --port 8101
-curl localhost:8101/health
+### Running Tests
+Run contract tests and end-to-end integration tests:
+```bash
+python -m pytest tests
 ```
-Then set `"mode": "http"` in `agent.json` if you want the orchestrator to call it over HTTP.
+
+### Running Over HTTP
+Start the agent service standalone:
+```bash
+uvicorn agents.receiving.app:app --port 8101
+```
+
+Health check:
+```bash
+curl http://localhost:8101/health
+```

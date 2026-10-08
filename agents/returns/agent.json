@@ -1,10 +1,10 @@
 {
   "stage": "returns",
-  "agent_id": "returns-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "returns-manager-rtn0045@2",
+  "owner": "@upeshchowdary",
   "mode": "inproc",
-  "url": "http://localhost:8104",
+  "url": "http://127.0.0.1:8104",
   "module": "agents.returns.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Round 2 Returns Manager pipeline (Gemini vision session + deterministic validation, identity fusion, completeness, Amazon-condition grading and rules engine) behind a Round 3 adapter. Default replay mode reads cassettes; live/record mode calls Gemini (needs GEMINI_API_KEY).",
+  "notes": "The committed demo captures in data/input/<unit>/returns/ are placeholder images and the 8 committed cassettes are hand-authored (provenance=synthetic, labelled synthetic-cassette in evidence): they exercise the pipeline, rules and hand-offs, not the model. Replace with real photos and record cassettes with agents/returns/tools/record_cassette.py. Units without captures fail open as no_reference_photo."
 }

@@ -1,10 +1,10 @@
 {
   "stage": "receiving",
-  "agent_id": "receiving-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "receiving-manager-rcv0138@2",
+  "owner": "@KiranTejz20005",
   "mode": "inproc",
-  "url": "http://localhost:8101",
+  "url": "http://127.0.0.1:8101",
   "module": "agents.receiving.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Round 2 Receiving Manager deterministic decision engine (PO vs observations, strict UNCERTAIN) behind a Round 3 adapter. Observations are replayed from the sample CSV by default (RECEIVING_MODEL_MODE=replay, model.name=csv-replay); RECEIVING_MODEL_MODE=live sends data/input/<unit>/receiving/ captures to Gemini in one call.",
+  "notes": "Ported from cube26-rcv-0138-kirantejz20005. No receiving captures are committed yet, so demo runs use the CSV replay."
 }
