@@ -1,7 +1,8 @@
 """Optional HTTP front door for the orchestrator (useful for a deployed demo).
 
   uvicorn orchestration.api:app --port 8100
-  POST /workflows                 {"org_id": "org_demo_alpha", "unit_id": "UNIT-0002"}   -> Workflow State (runs it)
+  POST /workflows                 {"org_id": "org_demo_alpha", "unit_id": "UNIT-0002"}   -> Workflow State (runs it); 404 if unknown in that org
+  GET  /workflows[?org_id=]       -> stored workflows, newest first
   GET  /workflows/{id}            -> Workflow State
   GET  /workflows/{id}/evidence   -> the workflow plus all its evidence records
   POST /workflows/{id}/resume     -> continue after a halt / decision / failure
@@ -78,11 +79,21 @@ def health() -> dict:
     return {"status": "ok" if ok else "degraded", "flow": load_flow(FLOW)["flow_id"], "agents": agents}
 
 
+def _known(org: str, subject: str) -> bool:
+    """A subject exists for an org when any stage's data has it, or the Pod's / organiser's cases list it."""
+    if any(sample_data.has(kind, subject, org) for kind in sample_data.FILES):
+        return True
+    return any(c["org_id"] == org and c["unit_id"] == subject for c in list_cases())
+
+
 @app.post("/workflows")
 def create(body: dict) -> dict:
     org, subject = body.get("org_id"), body.get("subject_id") or body.get("unit_id")
     if not org or not subject:
         raise HTTPException(422, "org_id and unit_id (or subject_id) are required")
+    if not _known(org, subject):
+        # Tenancy at the front door: a subject that does not exist under this org is refused, and no workflow is created.
+        raise HTTPException(404, f"unknown subject {subject} in {org}")
     case = {"org_id": org, "unit_id": subject, "route": body.get("route") or sample_data.route(subject, org),
             "returned": body.get("returned", sample_data.has("returns", subject, org))}
     return run_workflow(case, load_flow(FLOW), STORE)
