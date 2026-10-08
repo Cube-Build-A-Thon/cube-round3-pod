@@ -225,12 +225,15 @@ def build_returns_record(
     if recorded_calls is not None:
         payload["recorded_calls"] = recorded_calls
 
+    # D-013: a replayed answer is labelled as recorded, the same way Pack labels its benchmark replay, so nobody reads
+    # "gemini … 0 calls" as a live judgment. Live runs keep the model name and the real request count.
+    replayed = model_mode == "replay"
     model_meta = {
-        "name": model_name,
+        "name": f"{model_name} (recorded)" if replayed else model_name,
         "version": model_version,
-        "provider": "google",
+        "provider": "replay:cassette" if replayed else "google",
         "prompt_version": prompt_version,
-        "calls": live_calls if model_mode == "live" else 0,
+        "calls": live_calls if model_mode in ("live", "record") else 0,
         "cost_usd": 0.0,
     }
 

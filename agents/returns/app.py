@@ -48,6 +48,7 @@ from agents.returns.adapter.runtime import (
     run_sync,
 )
 from agents.returns.adapter.upstream import check_packing_error, reconcile_upstream
+from shared.utils.hashing import seal
 from shared.utils.log import get_logger
 from shared.utils.records import pending_output, utcnow
 from shared.utils.server import make_app
@@ -80,6 +81,16 @@ def _read_prompt_version() -> str:
         except Exception:
             pass
     return "1.5.0"
+
+
+def _round2_settings() -> Settings:
+    """Round 2 Settings, with the Pod's LOG_LEVEL convention mapped onto Round 2's.
+
+    The Pod documents LOG_LEVEL as DEBUG | INFO | WARNING (`.env.example`, `make run` sets WARNING); Round 2 accepts only
+    lower-case debug | info | warning | error and raised a ValidationError on the Pod's values, which crashed this agent.
+    """
+    level = os.environ.get("LOG_LEVEL", "info").strip().lower()
+    return Settings(log_level=level if level in ("debug", "info", "warning", "error") else "info")
 
 
 ROUND2_COMMIT = _read_round2_commit()
@@ -130,7 +141,11 @@ def handle(request: dict) -> dict:
 
     # 4. Model client and mode configuration (§4.4)
     mode = os.environ.get("RETURNS_MODEL_MODE", "replay")
-    settings = Settings()
+    try:
+        settings = _round2_settings()
+    except Exception as exc:  # a configuration problem is recorded, never a crash of the agent
+        return pending_output(request, code="model_not_configured", message=f"Round 2 settings invalid: {exc}"[:500],
+                              retryable=False, agent_id=AGENT_ID)
 
     try:
         client, cassette_path = create_model_client(
@@ -165,6 +180,9 @@ def handle(request: dict) -> dict:
             retryable=False,
             agent_id=AGENT_ID,
         )
+    except Exception as exc:  # any other client set-up failure is recorded, never a crash
+        return pending_output(request, code="model_not_configured", message=f"{type(exc).__name__}: {exc}"[:500],
+                              retryable=False, agent_id=AGENT_ID)
 
     cassette_sha256: str | None = None
     if cassette_path and cassette_path.is_file():
@@ -219,47 +237,36 @@ def handle(request: dict) -> dict:
                 list_price_minor=order.list_price_minor,
             )
 
+    def _pending_after_calls(code: str, message: str, retryable: bool) -> dict:
+        """A fail-open record that still says which model was called and how many requests were really sent:
+        failed requests count against the quota too, so `calls: 0` would understate the spend."""
+        out = pending_output(request, code=code, message=message, retryable=retryable, agent_id=AGENT_ID)
+        if mode != "replay" and quota.requests_sent:
+            ev = dict(out["evidence"])
+            ev["model"] = {"name": settings.rm_judgment_model, "version": settings.rm_judgment_model, "provider": "google",
+                           "prompt_version": PROMPT_VERSION, "calls": quota.requests_sent, "cost_usd": 0.0}
+            out = {**out, "evidence": seal(ev)}
+        return out
+
     try:
         row_result: RowResult = run_sync(_execute_pipeline())
     except CassetteMismatch as exc:
-        return pending_output(
-            request,
-            code="cassette_mismatch",
-            message=str(exc),
-            retryable=False,
-            agent_id=AGENT_ID,
-        )
+        return _pending_after_calls("cassette_mismatch", str(exc), False)
     except (QuotaExhaustedError, RequestCapReached) as exc:
-        return pending_output(
-            request,
-            code="quota_exhausted",
-            message=str(exc),
-            retryable=True,
-            agent_id=AGENT_ID,
-        )
+        return _pending_after_calls("quota_exhausted", str(exc), True)
     except Exception as exc:
         logger.error("Returns Manager pipeline failed: %s (%s)", type(exc).__name__, exc, exc_info=True)
-        return pending_output(
-            request,
-            code="agent_internal_error",
-            message=f"{type(exc).__name__}: {exc}",
-            retryable=True,
-            agent_id=AGENT_ID,
-        )
+        return _pending_after_calls("agent_internal_error", f"{type(exc).__name__}: {exc}", True)
 
     # Handle runner fail-open (§4.4)
     if row_result.note is not None:
         note_msg = row_result.output_row.get("rationale") or row_result.note
-        return pending_output(
-            request,
-            code=row_result.note,
-            message=note_msg,
-            retryable=False,
-            agent_id=AGENT_ID,
-        )
+        return _pending_after_calls(row_result.note, note_msg, False)
 
     # 7. Check for packing error note (§4.3)
-    ident_chk = next((c for c in (row_result.detail or {}).get("checks", []) if c.get("name") == "identity"), None)
+    # Round 2 checks carry their key in `check_key` (judgment/pipeline.py: Check); `name` never existed, so this lookup
+    # used to miss and the packing-error note could never fire.
+    ident_chk = next((c for c in (row_result.detail or {}).get("checks", []) if c.get("check_key") == "identity"), None)
     ident_verdict = ident_chk["verdict"] if ident_chk else "UNCERTAIN"
     packing_note = check_packing_error(upstream_recon, ident_verdict)
 
