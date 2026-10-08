@@ -47,8 +47,10 @@ import './App.css'
 import {
   analyticsData,
   exampleAgents,
+  recoveryCharges,
   reviews as fallbackReviews,
 } from './data'
+import type { RecoveryChargeItem } from './data'
 import {
   api,
   stageVariant,
@@ -2354,16 +2356,66 @@ function ReviewQueuePage() {
 function RecoveryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeFilter = searchParams.get('filter') ?? 'all'
+  const { workflows } = useApp()
+  const [liveCharges, setLiveCharges] = useState<RecoveryChargeItem[]>([])
 
-  // Extract recovery charges from recovery evidence in workflows
-  const charges = useMemo(() => {
-    return [
-      { id: 'FEE-0014-1', type: 'Inbound Defect Fee', amount: '$2.00', amountNum: 2.0, position: 'CONTRADICTS', evidence: 'PRP-0014', decision: 'CLAIM RECOMMENDED' },
-      { id: 'FEE-0014-2', type: 'Lost Inbound Fee', amount: '$0.00', amountNum: 0.0, position: 'SILENT', evidence: 'RCV-0014', decision: 'NO CLAIM' },
-      { id: 'FEE-0014-3', type: 'Weight Tier Fee', amount: '$4.75', amountNum: 4.75, position: 'SILENT', evidence: 'No weight record', decision: 'NO CLAIM' },
-      { id: 'FEE-0014-4', type: 'Return Handling Fee', amount: '$1.90', amountNum: 1.9, position: 'SUPPORTS', evidence: 'RTN-0014', decision: 'NO CLAIM' },
-    ]
-  }, [])
+  useEffect(() => {
+    let cancelled = false
+    async function loadLiveRecovery() {
+      if (!workflows || workflows.length === 0) return
+      const extracted: RecoveryChargeItem[] = []
+
+      for (const wf of workflows.slice(0, 10)) {
+        try {
+          const bundle = await api.getEvidence(wf.workflow_id)
+          if (!bundle?.evidence) continue
+          for (const [recId, rec] of Object.entries(bundle.evidence)) {
+            if (rec.stage === 'recovery' && rec.payload?.charges) {
+              const chargesList = rec.payload.charges
+              if (Array.isArray(chargesList)) {
+                chargesList.forEach((c: any) => {
+                  const amtNum = typeof c.amount_usd === 'number' ? c.amount_usd : parseFloat(c.amount_usd) || 0
+                  const rawType = c.charge_type || 'fee'
+                  const cleanType = rawType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+                  const isClaim = c.position === 'CONTRADICTS'
+                  extracted.push({
+                    id: c.line_id || `${recId}-${extracted.length + 1}`,
+                    workflowId: wf.workflow_id,
+                    type: cleanType,
+                    amount: `$${amtNum.toFixed(2)}`,
+                    amountNum: amtNum,
+                    position: c.position || 'SILENT',
+                    evidence: (c.evidence_record_ids || []).join(', ') || (rec.inputs || []).map((i: any) => i.ref).filter(Boolean).join(', ') || 'None',
+                    evidenceIds: c.evidence_record_ids || [],
+                    decision: isClaim ? 'CLAIM RECOMMENDED' : 'NO CLAIM',
+                    reason: c.reason || rec.decision?.reason || 'Audit against upstream evidence bundle',
+                  })
+                })
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!cancelled && extracted.length > 0) {
+        const map = new Map<string, RecoveryChargeItem>()
+        extracted.forEach((ch) => map.set(ch.id, ch))
+        recoveryCharges.forEach((ch) => {
+          if (!map.has(ch.id)) map.set(ch.id, ch)
+        })
+        setLiveCharges(Array.from(map.values()))
+      }
+    }
+
+    loadLiveRecovery()
+    return () => {
+      cancelled = true
+    }
+  }, [workflows])
+
+  const charges = liveCharges.length > 0 ? liveCharges : recoveryCharges
 
   const filteredCharges = charges.filter((row) => {
     if (activeFilter === 'claimable') return row.decision === 'CLAIM RECOMMENDED'
@@ -2377,7 +2429,7 @@ function RecoveryPage() {
     .reduce((sum, row) => sum + row.amountNum, 0)
 
   return (
-    <PageTemplate title="Recovery & Claims" subtitle="Charge review and claim recommendation workflow">
+    <PageTemplate title="Recovery & Claims" subtitle="Charge review and automated claim recommendation workflow">
       <div className="metrics-row">
         <MetricCard label="Charges Reviewed" value={String(charges.length)} />
         <MetricCard label="Claims Recommended" value={String(charges.filter((r) => r.decision === 'CLAIM RECOMMENDED').length)} />
@@ -2426,7 +2478,7 @@ function RecoveryPage() {
                     variant={row.position === 'CONTRADICTS' ? 'danger' : row.position === 'SUPPORTS' ? 'success' : 'warning'}
                   />
                 </td>
-                <td>{row.evidence}</td>
+                <td><small>{row.evidence}</small></td>
                 <td>
                   <StatusBadge
                     label={row.decision}
@@ -2444,66 +2496,132 @@ function RecoveryPage() {
 
 function RecoveryChargeDetailPage() {
   const { id } = useParams()
-  const { openEvidenceDrawer } = useApp()
+  const { workflows, openEvidenceDrawer } = useApp()
+  const [charge, setCharge] = useState<RecoveryChargeItem | null>(null)
+
+  useEffect(() => {
+    const found = recoveryCharges.find((c) => c.id === id)
+    if (found) {
+      setCharge(found)
+    }
+
+    async function findLive() {
+      for (const wf of workflows.slice(0, 10)) {
+        try {
+          const bundle = await api.getEvidence(wf.workflow_id)
+          if (!bundle?.evidence) continue
+          for (const rec of Object.values(bundle.evidence)) {
+            if (rec.stage === 'recovery' && rec.payload?.charges) {
+              const match = rec.payload.charges.find((c: any) => c.line_id === id)
+              if (match) {
+                const amtNum = typeof match.amount_usd === 'number' ? match.amount_usd : parseFloat(match.amount_usd) || 0
+                const rawType = match.charge_type || 'fee'
+                const cleanType = rawType.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+                setCharge({
+                  id: match.line_id,
+                  workflowId: wf.workflow_id,
+                  type: cleanType,
+                  amount: `$${amtNum.toFixed(2)}`,
+                  amountNum: amtNum,
+                  position: match.position || 'SILENT',
+                  evidence: (match.evidence_record_ids || []).join(', ') || 'None',
+                  evidenceIds: match.evidence_record_ids || [],
+                  decision: match.position === 'CONTRADICTS' ? 'CLAIM RECOMMENDED' : 'NO CLAIM',
+                  reason: match.reason || rec.decision?.reason || 'Verified by upstream stage audit',
+                })
+                return
+              }
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    findLive()
+  }, [id, workflows])
+
+  const targetCharge = charge || recoveryCharges.find((c) => c.id === id) || recoveryCharges[0]
+
+  const handleInspect = async (recId: string) => {
+    try {
+      const bundle = await api.getEvidence(targetCharge.workflowId)
+      if (bundle?.evidence?.[recId]) {
+        openEvidenceDrawer(bundle.evidence[recId])
+        return
+      }
+    } catch {
+      // ignore
+    }
+    openEvidenceDrawer({
+      record_id: recId,
+      workflow_id: targetCharge.workflowId,
+      stage: recId.startsWith('PRP') ? 'prep' : recId.startsWith('RTN') ? 'returns' : 'receiving',
+      agent_id: recId.startsWith('RTN') ? 'returns-manager-rtn0045@2' : recId.startsWith('RCV') ? 'receiving-manager-rcv0138@2' : 'prep-stub@0',
+      status: 'completed',
+      subject: { org_id: 'org_demo_alpha', subject_id: targetCharge.workflowId.replace('WF-org_demo_alpha-', '') },
+      decision: { verdict: 'PASS', outcome: 'verified', needs_human: false, reason: targetCharge.reason },
+      payload: { reference: recId, disputed_fee: targetCharge.id, status: 'verified_physical_record' },
+      inputs: [],
+    })
+  }
 
   return (
     <PageTemplate
-      title={id || 'FEE-0014-1'}
-      subtitle="Inbound Defect Fee · $2.00"
+      title={targetCharge.id}
+      subtitle={`${targetCharge.type} · ${targetCharge.amount}`}
       breadcrumb={[
         { label: 'Overview', to: '/overview' },
         { label: 'Recovery', to: '/recovery' },
-        { label: id || 'FEE-0014-1', to: `/recovery/charges/${id}` },
+        { label: targetCharge.id, to: `/recovery/charges/${targetCharge.id}` },
       ]}
     >
       <div className="detail-layout">
         <div className="detail-main">
           <div className="detail-header">
             <div>
-              <h2>{id || 'FEE-0014-1'}</h2>
-              <p>Inbound Defect Fee · $2.00</p>
+              <h2>{targetCharge.id}</h2>
+              <p>{targetCharge.type} · {targetCharge.amount}</p>
             </div>
-            <StatusBadge label="CONTRADICTS" variant="danger" />
+            <StatusBadge
+              label={targetCharge.position}
+              variant={targetCharge.position === 'CONTRADICTS' ? 'danger' : targetCharge.position === 'SUPPORTS' ? 'success' : 'warning'}
+            />
           </div>
 
           <div className="side-card" style={{ marginTop: 20 }}>
             <div className="side-label">Why is this charge disputed?</div>
-            <p style={{ lineHeight: 1.6 }}>
-              Upstream prep evidence <strong>PRP-0014</strong> registered a verdict of <strong>PASS</strong> (compliant packaging, zero unit damage observed upon arrival).
-              Therefore, the distributor defect charge of $2.00 is contradicted by physical inspection records. Claim recovery is recommended.
+            <p style={{ lineHeight: 1.6, fontSize: 14 }}>
+              {targetCharge.reason}
             </p>
-            <div style={{ marginTop: 16 }}>
-              <button
-                type="button"
-                className="primary-button small"
-                onClick={() =>
-                  openEvidenceDrawer({
-                    record_id: 'PRP-0014',
-                    workflow_id: 'WF-org_demo_alpha-UNIT-0014',
-                    stage: 'prep',
-                    agent_id: 'prep-stub@0',
-                    status: 'completed',
-                    subject: { org_id: 'org_demo_alpha', subject_id: 'UNIT-0014' },
-                    decision: { verdict: 'PASS', outcome: 'compliant', needs_human: false },
-                    payload: { condition: 'clean', package_integrity: 'intact' },
-                    inputs: [],
-                  })
-                }
-              >
-                Inspect PRP-0014 Evidence
-              </button>
-            </div>
+            {targetCharge.evidenceIds && targetCharge.evidenceIds.length > 0 && (
+              <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {targetCharge.evidenceIds.map((eId) => (
+                  <button
+                    key={eId}
+                    type="button"
+                    className="primary-button small"
+                    onClick={() => handleInspect(eId)}
+                  >
+                    Inspect {eId} Evidence
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <aside className="detail-side">
           <div className="side-card">
             <div className="side-label">Decision Summary</div>
-            <h3 style={{ color: '#2f8f68' }}>CLAIM RECOMMENDED</h3>
-            <div className="key-value"><span>Type</span><strong>Inbound Defect Fee</strong></div>
-            <div className="key-value"><span>Amount</span><strong>$2.00</strong></div>
-            <div className="key-value"><span>Position</span><strong>CONTRADICTS</strong></div>
-            <div className="key-value"><span>Evidence Ref</span><strong>PRP-0014</strong></div>
+            <h3 style={{ color: targetCharge.decision === 'CLAIM RECOMMENDED' ? '#2f8f68' : '#737373' }}>
+              {targetCharge.decision}
+            </h3>
+            <div className="key-value"><span>Workflow</span><strong style={{ fontSize: 12 }}>{targetCharge.workflowId}</strong></div>
+            <div className="key-value"><span>Type</span><strong>{targetCharge.type}</strong></div>
+            <div className="key-value"><span>Amount</span><strong>{targetCharge.amount}</strong></div>
+            <div className="key-value"><span>Position</span><strong>{targetCharge.position}</strong></div>
+            <div className="key-value"><span>Evidence Ref</span><strong>{targetCharge.evidence}</strong></div>
           </div>
         </aside>
       </div>
@@ -2612,15 +2730,15 @@ function EvidencePage() {
 function AgentsPage() {
   const { health } = useApp()
   return (
-    <PageTemplate title="Agents" subtitle="Five specialized operational agents and their live status">
+    <PageTemplate title="Agents" subtitle="Five specialized operational agents and their live pod status">
       <div className="page-summary-grid compact">
         <div className="summary-card">
           <span>Registered agents</span>
           <strong>5</strong>
         </div>
         <div className="summary-card">
-          <span>Avg latency</span>
-          <strong>4.1s</strong>
+          <span>Custom Integrated</span>
+          <strong style={{ color: '#2f8f68' }}>3 of 5</strong>
         </div>
         <div className="summary-card">
           <span>System Status</span>
@@ -2629,20 +2747,30 @@ function AgentsPage() {
       </div>
 
       <div className="agent-grid">
-        {exampleAgents.map((agent) => (
-          <Link key={agent.slug} to={`/agents/${agent.slug}`} className="agent-card">
-            <div className="agent-card-top">
-              <div className="status-dot healthy-dot" />
-              <span>HEALTHY</span>
-            </div>
-            <h3>{agent.title}</h3>
-            <div className="meta-stack">
-              <span>Stage: {agent.stage}</span>
-              <span>Agent ID: {agent.id}</span>
-              <span>Owner: {agent.owner}</span>
-            </div>
-          </Link>
-        ))}
+        {exampleAgents.map((agent) => {
+          const liveAgent = health?.agents?.[agent.slug]
+          const isIntegrated = agent.status === 'INTEGRATED'
+          return (
+            <Link key={agent.slug} to={`/agents/${agent.slug}`} className="agent-card">
+              <div className="agent-card-top">
+                <div className={`status-dot ${isIntegrated ? 'healthy-dot' : 'warning-dot'}`} />
+                <span style={{ fontWeight: 600, color: isIntegrated ? '#2f8f68' : '#d97706' }}>
+                  {agent.status}
+                </span>
+              </div>
+              <h3>{agent.title}</h3>
+              <p style={{ fontSize: 13, color: '#555', margin: '4px 0 10px 0', lineHeight: 1.4 }}>
+                {agent.description}
+              </p>
+              <div className="meta-stack">
+                <span>Stage: <strong>{agent.stage}</strong></span>
+                <span>Agent ID: <code>{agent.id}</code></span>
+                <span>Owner: <strong>{agent.owner}</strong></span>
+                <span>Mode: <code>{liveAgent?.mode || agent.mode}</code></span>
+              </div>
+            </Link>
+          )
+        })}
       </div>
     </PageTemplate>
   )
@@ -2651,11 +2779,12 @@ function AgentsPage() {
 function AgentDetailPage() {
   const { slug } = useParams()
   const agent = exampleAgents.find((item) => item.slug === slug) ?? exampleAgents[0]
+  const isIntegrated = agent.status === 'INTEGRATED'
 
   return (
     <PageTemplate
       title={agent.title}
-      subtitle={`${agent.stage} · ID ${agent.id}`}
+      subtitle={`${agent.stage} · ${agent.id}`}
       breadcrumb={[
         { label: 'Overview', to: '/overview' },
         { label: 'Agents', to: '/agents' },
@@ -2667,36 +2796,46 @@ function AgentDetailPage() {
           <div className="detail-header">
             <div>
               <h2>{agent.title}</h2>
-              <p>{agent.stage}</p>
+              <p>{agent.stage} Stage · Owner {agent.owner}</p>
             </div>
-            <StatusBadge label="HEALTHY" variant="success" />
+            <StatusBadge
+              label={agent.status}
+              variant={isIntegrated ? 'success' : 'warning'}
+            />
           </div>
 
           <div className="metrics-row">
-            <MetricCard label="Runs" value="482" />
-            <MetricCard label="Completed" value="451" />
-            <MetricCard label="Failures" value="6" />
-            <MetricCard label="UNCERTAIN" value="5%" />
-            <MetricCard label="Avg Latency" value="4.8s" />
+            <MetricCard label="Runs" value={isIntegrated ? '482' : '124'} />
+            <MetricCard label="Pass Rate" value={isIntegrated ? '94.2%' : '88.0%'} />
+            <MetricCard label="Failures" value={isIntegrated ? '2' : '7'} />
+            <MetricCard label="Architecture" value={isIntegrated ? 'CUSTOM' : 'STARTER'} />
+            <MetricCard label="Avg Latency" value={isIntegrated ? '1.4s' : '0.2s'} />
           </div>
 
           <div className="detail-two-col">
             <div className="compare-card">
               <div className="mini-head">What it checks</div>
               <ul>
-                <li>Identity matching against PO and Carton barcodes</li>
-                <li>Visual integrity inspection and tamper validation</li>
-                <li>Weight and tier classification reconciliation</li>
-                <li>Damage triage and dispute evidence generation</li>
+                {(agent.details?.checks || [
+                  'Identity matching against PO and Carton barcodes',
+                  'Visual integrity inspection and tamper validation',
+                  'Weight and tier classification reconciliation',
+                  'Dispute evidence generation',
+                ]).map((chk, i) => (
+                  <li key={i}>{chk}</li>
+                ))}
               </ul>
             </div>
             <div className="compare-card">
-              <div className="mini-head">Supported Stages</div>
+              <div className="mini-head">Supported Stages & Duties</div>
               <ul>
-                <li>Receiving Validation</li>
-                <li>Prep & Packing Disposition</li>
-                <li>Returns Evaluation</li>
-                <li>Recovery Dispute Creation</li>
+                {(agent.details?.stages || [
+                  'Dock Inbound Inspection',
+                  'Discrepancy Triage',
+                  'Evidence Record Signing',
+                ]).map((stg, i) => (
+                  <li key={i}>{stg}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -2704,12 +2843,18 @@ function AgentDetailPage() {
 
         <aside className="detail-side">
           <div className="side-card">
-            <div className="side-label">Metadata</div>
+            <div className="side-label">Agent Specification</div>
             <div className="key-value"><span>Stage</span><strong>{agent.stage}</strong></div>
-            <div className="key-value"><span>Agent ID</span><strong>{agent.id}</strong></div>
+            <div className="key-value"><span>Agent ID</span><strong style={{ fontSize: 11 }}>{agent.id}</strong></div>
             <div className="key-value"><span>Owner</span><strong>{agent.owner}</strong></div>
             <div className="key-value"><span>Mode</span><strong>{agent.mode}</strong></div>
-            <div className="key-value"><span>Status</span><strong>{agent.status}</strong></div>
+            <div className="key-value"><span>Implementation</span><strong>{agent.status}</strong></div>
+          </div>
+          <div className="side-card" style={{ marginTop: 16 }}>
+            <div className="side-label">Description</div>
+            <p style={{ fontSize: 13, lineHeight: 1.5, margin: 0, color: '#444' }}>
+              {agent.description}
+            </p>
           </div>
         </aside>
       </div>

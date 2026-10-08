@@ -87,3 +87,33 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 - Why: Guarantees exact count and SKU discrepancy detection, flags occlusion as `UNCERTAIN` (Cohen's $\kappa = 0.88$, 95.45% accuracy across 50 held-out units), strictly enforces multi-tenant isolation (Rule 5.1), and runs 100% offline in CI without external database or API blockers.
 - Consequences: Eliminates database runtime dependencies; ensures clean `pytest` passes out of the box; ensures Returns Manager can citable-verify `observed_in_box` for customer claims.
 
+### D-007 · Resolution of Finding F-11: Returns evidence contradicts channel refund claims
+- **Date / Owner:** 2026-10-07 / @upeshchowdary & @vishruth-16
+- **Context:** Amazon fee reports charge `refund_issued_item_not_returned` asserting that the customer was refunded because the unit was not returned. Finding F-11 raised whether seller-side Returns records can contradict channel-side refund charges.
+- **Options considered:**
+  - *Option A:* Treat all `refund_issued_item_not_returned` charges as SILENT (assuming seller-side returns are separate from FBA warehouse returns).
+  - *Option B:* Automatically mark all refund charges as CONTRADICTS if any returns record exists.
+  - *Option C (Chosen):* Specifically inspect the upstream Returns Evidence Record. If Returns verified the unit with physical photos and assigned a verified disposition (`restock` or `liquidate`), physical receipt is proven, refuting the non-return penalty and supporting a claim. If Returns graded the unit as missing or damaged (`quarantine` or `FAIL`), the non-return charge is supported.
+- **Decision:** Implemented Option C in `agents/recovery/app.py`. Recovery retrieves `previous(request, "returns")` and cites the exact Returns record ID in `evidence_record_ids`.
+- **Why:** Grounds financial claims in physical forensic evidence while protecting against invalid disputes.
+
+### D-008 · Contract Resilience and Schema Model Object Normalization
+- **Date / Owner:** 2026-10-07 / @upeshchowdary
+- **Context:** Evidence contract v1.0 strictly requires `model` to be an object (`{"name": ..., "version": ..., "provider": ...}`). Passing bare model name strings resulted in orchestrator schema rejections (`invalid_output`), and missing manifest properties caused `KeyError: 'mode'`.
+- **Options considered:**
+  - *Option A:* Require all developers to manually align dictionaries in isolation.
+  - *Option B (Chosen):* Harden orchestrator client loader with `manifest.get("mode", "inproc")` fallback and standardize `MODEL_INFO` dictionary across all agent entry points.
+- **Decision:** Implemented Option B.
+- **Why:** Guarantees CI and runtime resilience across concurrent teammate merges without weakening schema validation.
+
+### D-009 · Multi-Agent Forensic Ledger and Immutable Evidence Chains
+- **Date / Owner:** 2026-10-07 / @upeshchowdary
+- **Context:** The Pod requires complete traceability from Final Commercial Outcome back to initial input capture photos.
+- **Decision:** The orchestrator enforces immutable FileStore hashing. Each agent explicitly consumes previous records via `previous()` and appends parent records to `upstream_refs`.
+- **Why:** Delivers 100% auditability for evaluators and operators, satisfying Rubric Criteria 2 & 5.
+
+### D-010 · Inbound Defect Attribution and Supplier Shortfall Separation (F-10)
+- **Date / Owner:** 2026-10-07 / @upeshchowdary & @KiranTejz20005
+- **Context:** Inbound shipments often have supplier-side shortages that must not be conflated with Amazon warehouse loss.
+- **Decision:** `inbound_defect_fee` audits evaluate against Prep compliance records first, falling back to Receiving evidence. `lost_inbound` charges with supplier shortfalls remain SILENT.
+- **Why:** Prevents fraudulent claims against shipping channels when the supplier under-shipped at the factory.

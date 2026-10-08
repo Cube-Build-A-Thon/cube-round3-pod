@@ -62,5 +62,5 @@ class HttpClient:
 
 def client_for(stage: str):
     manifest = load_manifest(stage)
-    mode = os.environ.get("ORCH_MODE") or manifest["mode"]
+    mode = os.environ.get("ORCH_MODE") or manifest.get("mode", "inproc")
     return InProcClient(manifest) if mode == "inproc" else HttpClient(manifest)

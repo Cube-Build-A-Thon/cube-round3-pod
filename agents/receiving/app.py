@@ -1,53 +1,123 @@
 """Receiving Manager: agent entry point.
 
-========================  REPLACE ME  ========================
-This file currently contains an ORGANISER STUB that replays the Round 2 sample CSV.
-Member 1: bring your Round 2 Receiving Manager here and make `handle()` call it.
-Keep the contract: take an Agent Input, return an Agent Output (EVIDENCE-CONTRACT.md).
-Run:  uvicorn agents.receiving.app:app --port 8101
-===============================================================
+Round 2 Receiving Manager pipeline (Multi-parameter visual perception +
+Deterministic Decision Engine, strict UNCERTAIN handling, and multi-provider fallback)
+behind a Round 3 adapter.
 """
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from agents.receiving.r2.decision_engine import evaluate_inspection
+from agents.receiving.r2.perception import observe_deterministic, observe_gemini
+from agents.receiving.r2.schemas import PurchaseOrderInput
 from shared.utils import sample_data
-from shared.utils.records import build_output, build_record, check
+from shared.utils.records import build_output, build_record, check, pending_output
 from shared.utils.server import make_app
-from shared.utils.stubs import STUB_MODEL, photos, verdict_from
+from shared.utils.stubs import photos
 
 STAGE = "receiving"
-AGENT_ID = "receiving-stub@0"
-DAMAGE_OK, DAMAGE_BAD = {"none"}, {"crushing", "water", "tears"}
+AGENT_ID = "receiving-manager-rcv0138@2"
 
 
 def handle(request: dict) -> dict:
     s = request["subject"]
-    r = sample_data.row("receiving", s["subject_id"], s["org_id"])  # LookupError -> 404 (tenancy)
-    refs = [p["ref"] for p in photos(r)]
-    flags = [f for f in r["quality_flags"].split(";") if f]
-    qo, qr = int(r["qty_ordered"]), int(r["qty_received"])
-    co, cr = int(r["cartons_ordered"]), int(r["cartons_received"])
+    subject_id = s["subject_id"]
+    org_id = s["org_id"]
+
+    # 1. Tenancy and PO row lookup (LookupError -> 404 for wrong tenant or unknown subject)
+    r = sample_data.row("receiving", subject_id, org_id)
+
+    # 2. Input captures discovery
+    input_items = request.get("inputs") or photos(r)
+    refs = [p["ref"] for p in input_items]
+
+    # 3. Construct Purchase Order specification input
+    po = PurchaseOrderInput(
+        order_number=r.get("po_number", ""),
+        po_line=r.get("po_line", "1"),
+        sku=r.get("sku", ""),
+        asin=r.get("asin", ""),
+        product_name=r.get("product_title", ""),
+        supplier=r.get("supplier", ""),
+        expected_quantity=int(r.get("qty_ordered", 0)),
+        expected_cartons=int(r.get("cartons_ordered", 0)),
+        expected_units_per_carton=int(r.get("units_per_carton_ordered", 1)),
+        expected_variant=r.get("spec_variant", ""),
+        expected_colour=r.get("spec_colour", ""),
+        expected_components=[c.strip() for c in (r.get("spec_components") or "").split(";") if c.strip()],
+    )
+
+    # 4. Multimodal Perception (Live Gemini on demand; Deterministic Replay by default)
+    mode = os.environ.get("RECEIVING_MODEL_MODE", "replay")
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+
+    if mode == "live" and gemini_key:
+        try:
+            obs, model_meta = observe_gemini(po, refs, gemini_key)
+        except Exception as exc:
+            # Fail open on model failure per contract
+            return pending_output(
+                request,
+                code="model_error",
+                message=f"Gemini perception failed: {exc}",
+                retryable=True,
+                agent_id=AGENT_ID,
+            )
+    else:
+        obs, model_meta = observe_deterministic(po, r, refs)
+
+    # 5. Deterministic Business Rules Decision Engine
+    decision_res = evaluate_inspection(po, obs, refs)
 
     checks = [
-        check("identity_match", verdict_from(r["identity_match"], {"yes"}, {"no"}), None,
-              expected=f"{r['sku']} ({r['product_title']})", observed=r["identity_match"],
-              evidence_refs=refs, uncertain_reason="poor_image"),
-        check("carton_count", "PASS" if co == cr else "FAIL", None, expected=co, observed=cr, evidence_refs=refs),
-        check("quantity", "PASS" if qo == qr else "FAIL", None, expected=qo, observed=qr, evidence_refs=refs),
-        check("carton_damage", verdict_from(r["carton_damage"], DAMAGE_OK, DAMAGE_BAD), None,
-              expected="none", observed=r["carton_damage"], evidence_refs=refs, uncertain_reason="poor_image"),
-        check("unit_damage", verdict_from(r["unit_damage"], DAMAGE_OK, DAMAGE_BAD), None,
-              expected="none", observed=r["unit_damage"], evidence_refs=refs, uncertain_reason="poor_image"),
-        check("quality_flags", "FAIL" if flags else "PASS", None, expected=[], observed=flags, evidence_refs=refs),
+        check(
+            c.check_key,
+            c.verdict,
+            c.confidence,
+            expected=c.expected,
+            observed=c.observed,
+            detail=c.detail,
+            evidence_refs=c.evidence_refs,
+            uncertain_reason=c.uncertain_reason,
+        )
+        for c in decision_res.checks
     ]
-    verdict = "FAIL" if any(c["verdict"] == "FAIL" for c in checks) else (
-        "UNCERTAIN" if any(c["verdict"] == "UNCERTAIN" for c in checks) else "PASS")
-    outcome = {"PASS": "accept", "FAIL": "accept_with_exceptions", "UNCERTAIN": "pending_review"}[verdict]
+
+    qo, qr = po.expected_quantity, int(r.get("qty_received", 0))
+    flags = [f for f in r.get("quality_flags", "").split(";") if f]
+
+    # 6. Build contract-compliant Evidence Record
     record = build_record(
-        request, agent_id=AGENT_ID, record_id=r["record_id"], captured_at=r["captured_at"], operator_id=r["operator_id"],
-        unit_scope="po_line", refs={"po_number": r["po_number"], "po_line": r["po_line"], "sku": r["sku"], "asin": r["asin"]},
-        checks=checks, outcome=outcome, model=STUB_MODEL, inputs=photos(r),
-        reason=f"stub replay of sample row; {sum(c['verdict'] == 'FAIL' for c in checks)} failed check(s)",
-        payload={"supplier": r["supplier"], "qty_ordered": qo, "qty_received": qr, "shortfall_units": max(qo - qr, 0),
-                 "quality_flags": flags},
+        request,
+        agent_id=AGENT_ID,
+        record_id=r["record_id"],
+        captured_at=r["captured_at"],
+        operator_id=r.get("operator_id"),
+        unit_scope="po_line",
+        refs={
+            "po_number": r["po_number"],
+            "po_line": r["po_line"],
+            "sku": r["sku"],
+            "asin": r["asin"],
+        },
+        checks=checks,
+        outcome=decision_res.outcome,
+        verdict=decision_res.verdict,
+        reason=decision_res.reason,
+        model=model_meta,
+        inputs=input_items,
+        needs_human=decision_res.needs_human,
+        payload={
+            "supplier": r["supplier"],
+            "qty_ordered": qo,
+            "qty_received": qr,
+            "shortfall_units": max(qo - qr, 0),
+            "quality_flags": flags,
+        },
     )
+
     return build_output(record)
 
 

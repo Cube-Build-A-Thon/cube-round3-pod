@@ -199,10 +199,92 @@ export const reviews = [
   { unit: 'UNIT-0021', workflow: 'WF-org_demo_alpha-UNIT-0021', stage: 'Recovery', problem: 'Charge contradicted by upstream evidence', confidence: '0.79', reason: 'Prep evidence contradicts the inbound defect fee.', evidenceCount: 3, action: 'Apply Override' },
 ]
 
-export const recoveryCharges = [
-  { id: 'FEE-0014-1', type: 'Inbound Defect Fee', amount: '$2.00', position: 'CONTRADICTS', evidence: 'PRP-0014', decision: 'CLAIM RECOMMENDED' },
-  { id: 'FEE-0014-2', type: 'Weight Tier Fee', amount: '$4.75', position: 'SILENT', evidence: 'No weight evidence', decision: 'NO CLAIM' },
-  { id: 'FEE-0014-3', type: 'Return Handling Fee', amount: '$1.90', position: 'SUPPORTS', evidence: 'RTN-0014', decision: 'NO CLAIM' },
+export interface RecoveryChargeItem {
+  id: string
+  workflowId: string
+  type: string
+  amount: string
+  amountNum: number
+  position: 'CONTRADICTS' | 'SUPPORTS' | 'SILENT' | string
+  evidence: string
+  evidenceIds: string[]
+  decision: 'CLAIM RECOMMENDED' | 'NO CLAIM' | string
+  reason: string
+}
+
+export const recoveryCharges: RecoveryChargeItem[] = [
+  {
+    id: 'FEE-0014-1',
+    workflowId: 'WF-org_demo_alpha-UNIT-0014',
+    type: 'Inbound Defect Fee',
+    amount: '$2.00',
+    amountNum: 2.0,
+    position: 'CONTRADICTS',
+    evidence: 'PRP-0014',
+    evidenceIds: ['PRP-0014'],
+    decision: 'CLAIM RECOMMENDED',
+    reason: 'Upstream prep evidence PRP-0014 registered a verdict of PASS (compliant packaging, zero unit damage). Defect fee is contradicted by physical inspection records.',
+  },
+  {
+    id: 'FEE-0014-2',
+    workflowId: 'WF-org_demo_alpha-UNIT-0014',
+    type: 'Lost Inbound Fee',
+    amount: '$0.00',
+    amountNum: 0.0,
+    position: 'SILENT',
+    evidence: 'RCV-0014',
+    evidenceIds: ['RCV-0014'],
+    decision: 'NO CLAIM',
+    reason: 'Receiving shortfall is supplier-side (vendor short shipment), not channel-side loss (Finding F-10).',
+  },
+  {
+    id: 'FEE-0014-3',
+    workflowId: 'WF-org_demo_alpha-UNIT-0014',
+    type: 'Weight Tier Fee',
+    amount: '$4.75',
+    amountNum: 4.75,
+    position: 'SILENT',
+    evidence: 'No weight record',
+    evidenceIds: [],
+    decision: 'NO CLAIM',
+    reason: 'No measured scale weight or carton dimensions registered upstream (Finding F-07).',
+  },
+  {
+    id: 'FEE-0014-4',
+    workflowId: 'WF-org_demo_alpha-UNIT-0014',
+    type: 'Refund Item Not Returned',
+    amount: '$15.50',
+    amountNum: 15.5,
+    position: 'CONTRADICTS',
+    evidence: 'RTN-0014',
+    evidenceIds: ['RTN-0014'],
+    decision: 'CLAIM RECOMMENDED',
+    reason: 'Returns Manager RTN-0014 confirmed unit was returned and processed with disposition restock. Dispute claim recommended under Finding F-11.',
+  },
+  {
+    id: 'FEE-0018-1',
+    workflowId: 'WF-org_demo_alpha-UNIT-0018',
+    type: 'Refund Item Not Returned',
+    amount: '$24.99',
+    amountNum: 24.99,
+    position: 'CONTRADICTS',
+    evidence: 'RTN-0018',
+    evidenceIds: ['RTN-0018'],
+    decision: 'CLAIM RECOMMENDED',
+    reason: 'Returns Manager RTN-0018 verified physical item receipt and completed restock inspection. Channel refund is invalid under Finding F-11.',
+  },
+  {
+    id: 'FEE-0021-1',
+    workflowId: 'WF-org_demo_alpha-UNIT-0021',
+    type: 'Inbound Defect Fee',
+    amount: '$3.50',
+    amountNum: 3.5,
+    position: 'CONTRADICTS',
+    evidence: 'PRP-0021',
+    evidenceIds: ['PRP-0021'],
+    decision: 'CLAIM RECOMMENDED',
+    reason: 'Prep inspection record verified item arrived sealed with intact secondary polybagging.',
+  },
 ]
 
 export const failures = [
@@ -227,10 +309,123 @@ export const evidenceGraph = [
   { id: 'Outcome', label: 'Final Outcome', value: 1 },
 ]
 
-export const exampleAgents = [
-  { slug: 'receiving', title: 'Receiving Manager', stage: 'Receiving', id: 'AGENT-RCV-01', owner: 'Ops Team A', mode: 'AUTO', status: 'HEALTHY' },
-  { slug: 'prep', title: 'Prep Manager', stage: 'Prep', id: 'AGENT-PRP-01', owner: 'Ops Team B', mode: 'AUTO', status: 'HEALTHY' },
-  { slug: 'pack', title: 'Pack Manager', stage: 'Pack', id: 'AGENT-PKG-01', owner: 'Ops Team C', mode: 'AUTO', status: 'HEALTHY' },
-  { slug: 'returns', title: 'Returns Manager', stage: 'Returns', id: 'AGENT-RTN-01', owner: 'Ops Team D', mode: 'AUTO', status: 'HEALTHY' },
-  { slug: 'recovery', title: 'Recovery Manager', stage: 'Recovery', id: 'AGENT-RCY-01', owner: 'Ops Team E', mode: 'AUTO', status: 'HEALTHY' },
+export interface ExampleAgentItem {
+  slug: string
+  title: string
+  stage: string
+  id: string
+  owner: string
+  mode: string
+  status: 'INTEGRATED' | 'STARTER STUB'
+  description: string
+  details?: {
+    checks: string[]
+    stages: string[]
+    responsibilities: string[]
+  }
+}
+
+export const exampleAgents: ExampleAgentItem[] = [
+  {
+    slug: 'receiving',
+    title: 'Receiving Manager',
+    stage: 'Receiving',
+    id: 'receiving-manager-rcv0138@2',
+    owner: '@KiranTejz20005',
+    mode: 'INPROC',
+    status: 'INTEGRATED',
+    description: 'Inbound PO matching, carton inspection, serial registration & discrepancy flagging.',
+    details: {
+      checks: [
+        'Identity matching against PO and Carton barcodes',
+        'Visual integrity inspection and carton damage scoring',
+        'Supplier shortfall detection vs channel-side loss (Finding F-10)',
+        'Carrier bill of lading tracking code reconciliation',
+      ],
+      stages: ['Inbound Dock Intake', 'Physical Carton Inspection', 'Discrepancy Triage'],
+      responsibilities: ['PO Verification', 'Damage Flagging', 'Shortfall Attribution'],
+    },
+  },
+  {
+    slug: 'prep',
+    title: 'Prep Manager',
+    stage: 'Prep',
+    id: 'prep-stub@0',
+    owner: '@mdsuhana231-gif',
+    mode: 'INPROC',
+    status: 'STARTER STUB',
+    description: 'Packaging compliance, barcode labeling, polybagging, and prep checks.',
+    details: {
+      checks: [
+        'Polybag suffocation warning label validation',
+        'FNSKU and UPC item scannability audit',
+        'Fragile bubble-wrap cushioning check',
+        'Multipack grouping integrity verification',
+      ],
+      stages: ['Prep Staging', 'Secondary Packaging', 'Labeling'],
+      responsibilities: ['Polybag Compliance', 'Label Inspection', 'Item Sealing'],
+    },
+  },
+  {
+    slug: 'pack',
+    title: 'Pack Manager',
+    stage: 'Pack',
+    id: 'pack-stub@0',
+    owner: '@nikhilagarwal03',
+    mode: 'INPROC',
+    status: 'STARTER STUB',
+    description: 'Outbound dunnage, box size selection, weight validation, and carrier manifests.',
+    details: {
+      checks: [
+        'Outbound box size optimization and cube utilization',
+        'Dunnage packing material sufficiency',
+        'Package scale tare weight capture',
+        'Carrier shipping label verification',
+      ],
+      stages: ['Box Selection', 'Dunnage Insertion', 'Final Manifesting'],
+      responsibilities: ['Box Selection', 'Weight Capture', 'Carrier Hand-off'],
+    },
+  },
+  {
+    slug: 'returns',
+    title: 'Returns Manager',
+    stage: 'Returns',
+    id: 'returns-manager-rtn0045@2',
+    owner: '@upeshchowdary',
+    mode: 'INPROC',
+    status: 'INTEGRATED',
+    description: 'RMA validation, 30-day window check, tamper/damage triage, and restock/liquidate disposition.',
+    details: {
+      checks: [
+        'Return window eligibility validation (30-day policy rule check)',
+        'Physical package and item condition inspection with defect attribution',
+        'Tamper seal and security band integrity evaluation',
+        'Automatic disposition determination (restock, liquidate, refurbish, destroy)',
+        'Cross-agent linkage: Supplies verified proof to Recovery Manager to dispute refund charges (Finding F-11)',
+      ],
+      stages: ['RMA Intake & Receipt', 'Condition & Tamper Triage', 'Disposition & Recovery Linking'],
+      responsibilities: ['RMA Authorization', 'Triage Scoring', 'F-11 Recovery Proof'],
+    },
+  },
+  {
+    slug: 'recovery',
+    title: 'Recovery Manager',
+    stage: 'Recovery',
+    id: 'recovery-vishruth@1',
+    owner: '@vishruth-16',
+    mode: 'INPROC',
+    status: 'INTEGRATED',
+    description: 'Channel charge audit, upstream contradiction discovery (F-07, F-09, F-10, F-11), and recovery dispute filing.',
+    details: {
+      checks: [
+        'Automated audit of distributor fee deductions against prior stage evidence',
+        'Cross-referencing Prep inspection to contradict Inbound Defect Fees',
+        'Cross-referencing Returns restock evidence to contradict unreturned item refund charges (Finding F-11)',
+        'Zero-amount fee filtering (Finding F-09) and missing tare weight detection (Finding F-07)',
+        'Supplier-side inbound shortfall exclusion from distributor claims (Finding F-10)',
+      ],
+      stages: ['Charge Ingestion', 'Evidence Cross-Audit', 'Dispute Claim Generation'],
+      responsibilities: ['Fee Audit', 'Contradiction Detection', 'Recovery Claim Submission'],
+    },
+  },
 ]

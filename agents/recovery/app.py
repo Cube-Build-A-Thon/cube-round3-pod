@@ -151,16 +151,43 @@ def position(line: dict, request: dict) -> tuple[str, str, list[str]]:
     if ctype == "lost_inbound":
         return "SILENT", "receiving shortfall is supplier-side, not channel-side loss (finding F-10)", []
 
+    ret = previous(request, "returns")
+    if ctype == "refund_issued_item_not_returned":
+        # Resolution of Finding F-11:
+        if ret and ret.get("status") == "completed":
+            ret_verdict = ret.get("decision", {}).get("verdict", "")
+            disposition = ret.get("decision", {}).get("outcome", "unknown")
+            if ret_verdict == "PASS" or disposition in ("restock", "liquidate"):
+                return "CONTRADICTS", f"Returns evidence ({ret['record_id']}) proves item returned with disposition '{disposition}' (finding F-11)", [ret["record_id"]]
+            return "SILENT", f"Returns evidence ({ret['record_id']}) is {ret_verdict} / unverified (finding F-11)", [ret["record_id"]]
+        return "SILENT", "no seller-side return record to contradict refund (finding F-11)", []
+
+    prep = previous(request, "prep")
+    rcv = previous(request, "receiving")
+    if ctype == "inbound_defect_fee":
+        if prep and prep.get("status") == "completed":
+            stat = effective_verdict(request, prep)
+            if stat == "PASS":
+                return "CONTRADICTS", "Prep evidence shows the unit compliant", [prep["record_id"]]
+            elif stat == "FAIL":
+                return "SUPPORTS", "Prep evidence confirms defect", [prep["record_id"]]
+            return "SILENT", "Prep evidence is uncertain", [prep["record_id"]]
+        if rcv and rcv.get("status") == "completed":
+            stat = effective_verdict(request, rcv)
+            if stat == "PASS":
+                return "CONTRADICTS", "Receiving evidence shows the unit compliant", [rcv["record_id"]]
+            elif stat == "FAIL":
+                return "SUPPORTS", "Receiving evidence confirms inbound defect", [rcv["record_id"]]
+            return "SILENT", "Receiving evidence is uncertain", [rcv["record_id"]]
+
     # Map upstream records into our engine's standard evidence format
     evidence_records = []
-    prep = previous(request, "prep")
     if prep and prep.get("status") == "completed":
         prep_ev = dict(prep)
         prep_ev["source_manager"] = "prep"
         prep_ev["compliance_status"] = effective_verdict(request, prep)
         evidence_records.append(prep_ev)
         
-    ret = previous(request, "returns")
     if ret and ret.get("status") == "completed":
         ret_ev = dict(ret)
         ret_ev["source_manager"] = "returns"
