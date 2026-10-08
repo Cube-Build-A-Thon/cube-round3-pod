@@ -77,3 +77,9 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 ## Your Pod's decisions
 
 _Add entries below._
+Receiving — findings & decisions
+D-R1: Fixture staging must derive from each unit's sample CSV row, not bereused across units. First staging round mismatched products to PO linesand was caught by the agent's own honest verdicts — the failure analysiswas the correction mechanism. (UNIT-0012/0039 regeneration pending.)
+D-R2: DEGRADED photos are used but recorded; the gate excludes onlyREJECTED. Confirmed by probe (flat gray = DEGRADED/blurry, edge 118.4 —flatness is not severe blur).
+D-R3: refs are contract identifiers, normalized to forward slashes —evidence records are byte-identical across platforms (patch branch).
+D-R4: generated images carry generator text (watermarks/folder names) thatcan collide with label-text checks — fixture prompts must forbid it.
+D-R5: content-hash caching across CI and local runs: first encounter paysthe VLM calls, reruns are free — model.calls reports honestly per thebatching rule.
