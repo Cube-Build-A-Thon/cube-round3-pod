@@ -304,3 +304,19 @@ def test_specialist_flow_has_no_prep_and_recovery_stays_silent_on_inbound_fees(c
     for charge in rec["payload"]["charges"]:
         if charge["charge_type"] == "inbound_defect_fee":
             assert charge["position"] == "SILENT", "no Prep evidence, so no claim"
+
+
+# ------------------------------------------------------------ an agent that cannot be imported
+def test_agent_that_cannot_be_imported_is_recorded_not_a_crash():
+    """A missing dependency in one agent (e.g. an import of a package not in requirements.txt) must become an error
+    record for that stage; the other stages still run and the workflow ends FAILED, never a crashed run."""
+    from orchestration.clients import InProcClient
+
+    broken = InProcClient({"module": "agents.no_such_agent_module", "stage": "returns"})
+    assert broken.load_error and "no_such_agent_module" in broken.load_error
+    wf, _ = run(returns=broken)
+    by_stage = {s["stage"]: s for s in wf["stage_results"]}
+    assert by_stage["returns"]["state"] == "error"
+    assert by_stage["returns"]["error"]["code"] == "agent_exception"
+    assert by_stage["recovery"]["state"] == "completed"
+    assert valid(wf)["status"] == "FAILED"

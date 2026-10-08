@@ -65,7 +65,12 @@ def health() -> dict:
         info = {k: manifest.get(k) for k in ("agent_id", "owner", "implementation")}
         client = client_for(stage)
         try:
-            state = client.health() if isinstance(client, HttpClient) else {"status": "ok", "mode": "inproc"}
+            if isinstance(client, HttpClient):
+                state = client.health()
+            elif getattr(client, "load_error", None):
+                state = {"status": "down", "mode": "inproc", "error": client.load_error[:200]}
+            else:
+                state = {"status": "ok", "mode": "inproc"}
             agents[stage] = {**info, **state}
         except Exception as exc:
             agents[stage] = {**info, "status": "down", "mode": "http", "error": str(exc)[:200]}
