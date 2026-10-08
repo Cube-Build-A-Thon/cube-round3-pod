@@ -5,7 +5,7 @@
 /agents/prep/         @prep-owner-handle
 /agents/pack/         @pack-owner-handle
 /agents/returns/      @returns-owner-handle
-/agents/recovery/     @recovery-owner-handle
+/agents/recovery/     @nithesh33758
 /orchestration/       @member1 @member2 @member3 @member4 @member5
 /shared/              @member1 @member2 @member3 @member4 @member5
 /tests/               @member1 @member2 @member3 @member4 @member5
