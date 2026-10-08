@@ -1,10 +1,10 @@
 {
   "stage": "prep",
-  "agent_id": "prep-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "prep-manager@2.0.0",
+  "owner": "@jayani1502",
   "mode": "inproc",
   "url": "http://localhost:8102",
   "module": "agents.prep.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "fba-deterministic-inspection-engine",
+  "notes": "Pure Python deterministic FBA inspection engine ported from jayani1502/cube26-prp-0206-jayani1502 with multi-check verification, dispute defense packs, and pharmaceutical safety valves."
 }
