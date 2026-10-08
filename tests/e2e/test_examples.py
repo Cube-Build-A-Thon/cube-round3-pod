@@ -27,6 +27,12 @@ def test_example_validates(path):
 @pytest.mark.parametrize("folder", ["happy-path", "uncertain-path", "end-to-end"])
 def test_example_cases_still_produce_the_documented_outcome(folder):
     """Re-run each example case with the stock stubs: the documented final outcome must still be what you get."""
+    stages = ("receiving", "prep", "pack", "returns", "recovery")
+    if any(json.loads((EXAMPLES.parent / "agents" / s / "agent.json").read_text())["implementation"] != "organiser-stub"
+           for s in stages):
+        # The examples document the STUB behaviour (same guard as the golden-file test in test_end_to_end.py).
+        # A real agent judges differently, e.g. a returned unit with no photos is UNCERTAIN, not the operator's CSV value.
+        pytest.skip("examples document the organiser stubs; a real agent is plugged in")
     case = json.loads((EXAMPLES / folder / "case.json").read_text())
     flow = load_flow(EXAMPLES.parent / "orchestration/flow.json")
     wf = run_workflow(case, flow, MemoryStore())
