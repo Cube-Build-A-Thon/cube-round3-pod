@@ -1,10 +1,10 @@
 {
   "stage": "pack",
-  "agent_id": "pack-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "pack-manager-nikhil@2.0.0",
+  "owner": "@nikhilagarwal03",
   "mode": "inproc",
   "url": "http://localhost:8103",
   "module": "agents.pack.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "VLM vision extractor (Llama-3.2-90B / Qwen) + deterministic reconciliation engine with occlusion guard and fail-open policy",
+  "notes": "Round 2 Pack Manager adapter with tri-state decisions (seal, stop_and_fix, pending_review), held-out benchmark replay, and tenancy isolation."
 }

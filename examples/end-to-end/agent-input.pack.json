@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "request_id": "WF-org_demo_bravo-UNIT-0006:pack",
+  "workflow_id": "WF-org_demo_bravo-UNIT-0006",
+  "stage": "pack",
+  "subject": {
+    "org_id": "org_demo_bravo",
+    "subject_id": "UNIT-0006",
+    "route": "mfn"
+  },
+  "inputs": [],
+  "previous_evidence": [],
+  "context": {
+    "overrides": []
+  }
+}
