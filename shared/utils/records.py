@@ -57,6 +57,12 @@ def build_record(request: dict, *, agent_id: str, record_id: str, captured_at: s
                  latency_ms: int | None = None, client_id: str | None = None) -> dict:
     """An Evidence Record for the stage/workflow/subject named in `request` (an Agent Input)."""
     verdict = verdict or rollup(checks)
+    if needs_human is None:
+        needs_human = (
+            verdict == "UNCERTAIN"
+            or outcome == "pending_review"
+            or any(c.get("verdict") == "UNCERTAIN" for c in checks)
+        )
     s = request["subject"]
     record: dict[str, Any] = {
         "schema_version": "1.0",
@@ -76,7 +82,7 @@ def build_record(request: dict, *, agent_id: str, record_id: str, captured_at: s
         "inputs": inputs or [],
         "checks": checks,
         "decision": {"verdict": verdict, "outcome": outcome, "confidence": confidence, "reason": reason,
-                     "needs_human": verdict == "UNCERTAIN" if needs_human is None else needs_human},
+                     "needs_human": bool(needs_human)},
         "payload": payload or {},
         "upstream_refs": upstream_refs or [r["record_id"] for r in request.get("previous_evidence", [])],
         "overrides": [],
