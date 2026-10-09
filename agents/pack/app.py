@@ -13,7 +13,7 @@ from shared.utils.server import make_app
 from shared.utils.stubs import STUB_MODEL, photos
 
 STAGE = "pack"
-AGENT_ID = "pack-stub@0"
+AGENT_ID = "pack-manager@0.1.0"
 
 
 def parse_lines(text: str) -> dict[str, int]:
@@ -51,3 +51,4 @@ def handle(request: dict) -> dict:
 
 
 app = make_app(STAGE, handle)
+

@@ -1,10 +1,10 @@
 {
   "stage": "pack",
-  "agent_id": "pack-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "pack-manager@0.1.0",
+  "owner": "@dheerajchandra28",
   "mode": "inproc",
   "url": "http://localhost:8103",
   "module": "agents.pack.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "AI Pack Manager Agent (Gemini Vision package content verification and discrepancy checking)",
+  "notes": "In-process by default. Serves FastAPI/Uvicorn on port 8103. Uses visual verification of package contents against expected orders to make SEAL or STOP & FIX determinations."
 }
