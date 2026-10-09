@@ -1,0 +1,98 @@
+{
+  "catalog_version": "0.2.0",
+  "retrieved_at": "2026-09-29",
+  "marketplace": "US",
+  "rules": [
+    {
+      "id": 2001,
+      "charge_type": "inbound_defect_fee",
+      "name": "FBA preparation, packing, and labeling requirements",
+      "policy_status": "needs_verification",
+      "verified": false,
+      "rule_text": "Working assumption only: contest an inbound defect when a relevant prep check passed before the charge, the shipment and unit can be matched, and the charge is not already reimbursed. Do not file until the current Amazon prep policy confirms the exact requirement.",
+      "source_url": "https://sell.amazon.com/fulfillment-by-amazon",
+      "linked_policy_urls": [
+        "https://sellercentral.amazon.com/help/hub/reference/external/G201030350",
+        "https://sellercentral.amazon.com/help/hub/reference/external/G201021850",
+        "https://sellercentral.amazon.com/help/hub/reference/external/G200141500"
+      ],
+      "verified": false,
+      "claim_window_days": null,
+      "valuation": null,
+      "evidence_requirements": ["prep evidence before the charge event", "shipment_id", "applicable check key"],
+      "verification_note": "Prep details came from mixed research; Seller Central policy text is required before automatic claims."
+    },
+    {
+      "id": 2002,
+      "charge_type": "lost_inbound",
+      "name": "FBA inventory receiving and loss policy",
+      "policy_status": "conflicting",
+      "verified": false,
+      "rule_text": "Working assumption only: a lost-inbound claim needs shipment identity, proof of delivery, ownership documentation, and shipped-versus-received reconciliation. The claim window is unresolved because available research conflicts between 9 months and 15-60 days; never auto-file while conflicting.",
+      "source_url": "https://m.media-amazon.com/images/G/01/rainier/help./Redlined_FBA_Reimbursement_policy_US.pdf",
+      "linked_policy_urls": [
+        "https://sellercentral.amazon.com/help/hub/reference/external/G201022330"
+      ],
+      "verified": false,
+      "claim_window_days": null,
+      "claim_window_range_days": [15, 60],
+      "valuation": "manufacturing_or_sourcing_cost_for_pre_order_loss",
+      "maximum_reimbursement_per_unit": 5000,
+      "evidence_requirements": ["shipment_id", "proof_of_ownership", "proof_of_delivery", "shipped_vs_received_reconciliation"],
+      "verification_note": "Research contains conflicting 9-month and 15-60-day windows. Confirm the current Seller Central rule."
+    },
+    {
+      "id": 2003,
+      "charge_type": "damaged_in_warehouse",
+      "name": "FBA inventory damage and reimbursement policy",
+      "policy_status": "verified_summary",
+      "verified": false,
+      "rule_text": "Working assumption based on the supplied policy summary: warehouse damage is potentially reimbursable when the item was sellable at receipt, damage occurred while in Amazon possession, and customer damage or seller disposal is excluded. Research indicates a 60-day window and sourcing-cost valuation for pre-order loss; verify current marketplace text before filing.",
+      "source_url": "https://m.media-amazon.com/images/G/01/rainier/help./Redlined_FBA_Reimbursement_policy_US.pdf",
+      "linked_policy_urls": [
+        "https://sellercentral.amazon.com/help/hub/reference/G201443070"
+      ],
+      "verified": false,
+      "claim_window_days": 60,
+      "valuation": "manufacturing_or_sourcing_cost_for_pre_order_loss",
+      "evidence_requirements": ["proof_item_was_undamaged_at_receipt", "shipping_documentation", "damage_occurred_in_amazon_possession"],
+      "verification_note": "Based on the supplied official PDF summary; confirm marketplace-specific text before production use."
+    },
+    {
+      "id": 2004,
+      "charge_type": "refund_issued_item_not_returned",
+      "name": "FBA customer returns and reimbursement policy",
+      "policy_status": "verified_summary",
+      "verified": false,
+      "rule_text": "Working assumption based on the supplied policy summary: a refund or replacement with no returned item may be recoverable after the waiting period, when the order, refund date, and missing return are evidenced and customer damage is excluded. Research indicates a 60-120-day handling window and refund or replacement sales value minus applicable fees; verify the current deadline before filing.",
+      "source_url": "https://m.media-amazon.com/images/G/01/rainier/help./Redlined_FBA_reimbursement_policy_US.pdf",
+      "linked_policy_urls": [
+        "https://sellercentral.amazon.com/help/hub/reference/external/G200379860",
+        "https://sellercentral.amazon.com/help/hub/reference/G201443070"
+      ],
+      "verified": false,
+      "claim_window_days": 60,
+      "claim_window_range_days": [60, 120],
+      "valuation": "refund_or_replacement_sales_price_minus_applicable_fees",
+      "evidence_requirements": ["amazon_order_id", "refund_or_replacement_date", "return_not_received", "customer_damage_excluded"],
+      "verification_note": "Based on the supplied official PDF summary; confirm the current Seller Central workflow and exact deadline."
+    },
+    {
+      "id": 2005,
+      "charge_type": "fulfilment_fee_weight_tier",
+      "name": "FBA fulfilment fee and product packaging requirements",
+      "policy_status": "verified_summary",
+      "verified": false,
+      "rule_text": "Working assumption based on Amazon FBA packaging and measurement guidelines: contest a fulfilment fee weight tier discrepancy when product packaging, prep, and item identity confirm compliance with Amazon tier requirements and predated the charge.",
+      "source_url": "https://sellercentral.amazon.com/help/hub/reference/external/G200141500",
+      "linked_policy_urls": [
+        "https://sellercentral.amazon.com/help/hub/reference/external/G200141500",
+        "https://sellercentral.amazon.com/help/hub/reference/external/G201030350"
+      ],
+      "claim_window_days": 90,
+      "valuation": "fee_difference_reimbursement",
+      "evidence_requirements": ["prep evidence before charge", "fnsku_label_flat", "fnsku_label_placement_valid", "unit_undamaged"],
+      "verification_note": "Based on official Amazon packaging guidelines; remeasurement and reimbursement dispute supported."
+    }
+  ]
+}
