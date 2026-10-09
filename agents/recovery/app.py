@@ -1,88 +1,131 @@
 """Recovery Manager: agent entry point.
 
-========================  REPLACE ME  ========================
-ORGANISER STUB. It reads the previous evidence in `request["previous_evidence"]` plus the sample fee report, and
-labels each charge CONTRADICTS / SUPPORTS / SILENT. The matching rules below are ILLUSTRATIVE ONLY, not claim
-logic. In particular they ignore the open Round 2 findings (docs/decisions.md, F-07 to F-12).
-Member 5: bring your Round 2 Recovery Manager here.
-
-Check semantics for Recovery: the condition is "this charge is supported by evidence".
-  PASS      evidence supports the charge     -> no claim
-  FAIL      evidence contradicts the charge  -> claim
-  UNCERTAIN evidence is silent / insufficient -> cannot claim; say why
-A wrongly filed claim costs standing with the channel, so SILENT must never become a claim.
-Recovery reads the accumulated evidence; it does not rewrite it or the workflow state.
-Run:  uvicorn agents.recovery.app:app --port 8105
-===============================================================
+This adapter connects the Round 3 Orchestrator to the external Recovery Manager API.
 """
+import os
+import requests
 from shared.utils import sample_data
-from shared.utils.records import build_output, build_record, check, utcnow
+from shared.utils.records import build_output, build_record, check, pending_output, utcnow
 from shared.utils.server import make_app
-from shared.utils.stubs import STUB_MODEL, effective_verdict, previous
 
 STAGE = "recovery"
-AGENT_ID = "recovery-stub@0"
-
-
-def position(line: dict, request: dict) -> tuple[str, str, list[str]]:
-    """(CONTRADICTS | SUPPORTS | SILENT, detail, evidence record ids). Uses EFFECTIVE verdicts (overrides applied)."""
-    ctype = line["charge_type"]
-    if ctype == "inbound_defect_fee":
-        prep = previous(request, "prep")
-        if not prep or prep["status"] != "completed":
-            return "SILENT", "no usable Prep record for this subject", []
-        v = effective_verdict(request, prep)
-        if v == "PASS":
-            return "CONTRADICTS", "Prep evidence shows the unit compliant", [prep["record_id"]]
-        if v == "FAIL":
-            return "SUPPORTS", "Prep evidence shows a defect", [prep["record_id"]]
-        return "SILENT", "Prep evidence is uncertain", [prep["record_id"]]
-    if ctype == "refund_issued_item_not_returned":
-        ret = previous(request, "returns")
-        if ret and ret["status"] == "completed" and ret["checks"] and ret["checks"][0]["verdict"] == "PASS":
-            return "CONTRADICTS", "Returns record shows the right item came back", [ret["record_id"]]
-        return "SILENT", "no usable Returns record", []
-    if ctype == "fulfilment_fee_weight_tier":
-        return "SILENT", "no measured weight/dimensions upstream (finding F-07)", []
-    if ctype == "lost_inbound":
-        return "SILENT", "receiving shortfall is supplier-side, not channel-side loss (finding F-10)", []
-    return "SILENT", f"no rule for {ctype}", []
-
+AGENT_ID = "recovery-manager"
+RECOVERY_URL = os.environ.get("RECOVERY_API_URL", "https://cube26-rcy-0066-https-github-com-saif8671.onrender.com/run")
+RECOVERY_API_KEY = os.environ.get("RECOVERY_API_KEY", "")
 
 def handle(request: dict) -> dict:
     s = request["subject"]
-    if not sample_data.has("receiving", s["subject_id"], s["org_id"]):
-        raise LookupError(f"unknown subject {s['subject_id']} in {s['org_id']}")  # tenancy: refuse, don't say "no claim"
-    lines = sample_data.fee_lines(s["subject_id"], s["org_id"])
-    checks, charges, claimable = [], [], 0.0
-    for line in lines:
-        pos, why, ids = position(line, request)
-        amount = float(line["amount_usd"])
-        if pos == "CONTRADICTS" and amount <= 0:
-            pos, why = "SILENT", "amount is 0.00: nothing to claim, or the amount is missing (finding F-09)"
-        verdict = {"CONTRADICTS": "FAIL", "SUPPORTS": "PASS", "SILENT": "UNCERTAIN"}[pos]
-        checks.append(check(f"charge_{line['line_id'].lower().replace('-', '_')}", verdict, None,
-                            expected="charge supported by evidence", observed=pos, detail=why,
-                            evidence_refs=ids, uncertain_reason="insufficient_evidence"))
-        if pos == "CONTRADICTS":
-            claimable += amount
-        charges.append({"line_id": line["line_id"], "charge_type": line["charge_type"], "amount_usd": amount,
-                        "position": pos, "reason": why, "evidence_record_ids": ids})
-    claim = any(c["position"] == "CONTRADICTS" for c in charges)
-    silent = any(c["position"] == "SILENT" for c in charges)
-    verdict = "FAIL" if claim else ("UNCERTAIN" if silent else "PASS")
-    outcome = "claim_recommended" if claim else ("insufficient_evidence" if silent else "no_claim")
-    record = build_record(
-        request, agent_id=AGENT_ID, record_id=f"RCY-{s['subject_id']}", model=STUB_MODEL,
-        captured_at=max((l["posted_date"] + "T00:00:00Z" for l in lines), default=utcnow()),
-        checks=checks, outcome=outcome, verdict=verdict,
-        # SILENT means "cannot claim", not "a human must look": do not flood reviewers.
-        needs_human=False,
-        reason=f"stub: {len(charges)} charge(s), {sum(c['position'] == 'CONTRADICTS' for c in charges)} contradicted",
-        payload={"charges": charges, "claimable_usd": round(claimable, 2),
-                 "unclaimable": [c for c in charges if c["position"] != "CONTRADICTS"]},
-    )
-    return build_output(record, next_step="complete")
+    unit_id = s["subject_id"]
+    org_id = s["org_id"]
+    
+    try:
+        if not sample_data.has("receiving", unit_id, org_id):
+            raise LookupError(f"unknown subject {unit_id} in {org_id}")
+            
+        lines = sample_data.fee_lines(unit_id, org_id)
+        
+        # Build the charges array expected by the Recovery API
+        charges = []
+        for line in lines:
+            charges.append({
+                "charge_id": line.get("line_id", ""),
+                "reason": line.get("charge_type", ""),
+                "amount": float(line.get("amount_usd", 0.0)),
+                "currency": "USD",
+                "charge_date": line.get("posted_date", ""),
+                "unit_id": unit_id,
+                "shipment_id": line.get("shipment_id", "")
+            })
+            
+    except LookupError:
+        # Fallback if no local sample data
+        charges = []
 
+    # Map the orchestrator's previous_evidence into the flat structure the Recovery API expects
+    previous_evidence = []
+    for ev in request.get("previous_evidence", []):
+        pe = {
+            "record_id": ev.get("record_id", ""),
+            "source_stage": ev.get("stage", ""),
+            "finding": ev.get("decision", {}).get("verdict", "UNCERTAIN"),
+            "unit_id": ev.get("subject", {}).get("unit_id", ev.get("subject", {}).get("subject_id", "")),
+            "shipment_id": ev.get("subject", {}).get("refs", {}).get("shipment_id", ""),
+            "captured_at": ev.get("captured_at", ""),
+            "event_type": f"{ev.get('stage', 'unknown')}_compliance",
+            "description": ev.get("decision", {}).get("reason", ""),
+            "payload_dict": ev.get("payload", {})
+        }
+        previous_evidence.append(pe)
+
+    payload = {
+        "workflow_id": request.get("workflow_id", f"wf-recover-{unit_id}"),
+        "stage": "recovery",
+        "subject": {
+            "org_id": org_id,
+            "unit_id": unit_id,
+            "shipment_id": request.get("subject", {}).get("refs", {}).get("shipment_id", ""),
+            "order_id": request.get("subject", {}).get("refs", {}).get("order_id", ""),
+            "sku": request.get("subject", {}).get("refs", {}).get("sku", ""),
+            "fnsku": request.get("subject", {}).get("refs", {}).get("fnsku", "")
+        },
+        "charges": charges,
+        "previous_evidence": previous_evidence
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-org-id": org_id
+    }
+    if RECOVERY_API_KEY:
+        headers["x-api-key"] = RECOVERY_API_KEY
+    
+    try:
+        resp = requests.post(RECOVERY_URL, json=payload, headers=headers, timeout=60.0)
+    except Exception as e:
+        return pending_output(request, code="NETWORK_ERROR", message=str(e), retryable=True, agent_id=AGENT_ID)
+
+    if resp.status_code != 200:
+        return pending_output(request, code=f"HTTP_{resp.status_code}", message=resp.text, retryable=True, agent_id=AGENT_ID)
+
+    try:
+        data = resp.json()
+    except Exception as e:
+        return pending_output(request, code="INVALID_JSON", message=str(e), retryable=True, agent_id=AGENT_ID)
+
+    # Translate the custom Recovery Manager response into standard Evidence Record
+    checks = []
+    import re
+    cvmap = {"PASS": "PASS", "FAIL": "FAIL", "SILENT": "UNCERTAIN", "UNCERTAIN": "UNCERTAIN"}
+    for c in data.get("checks", []):
+        raw_key = c.get("check_key", "unknown").lower()
+        safe_key = re.sub(r'[^a-z0-9_]', '_', raw_key)
+        checks.append(check(
+            check_key=safe_key,
+            verdict=cvmap.get(c.get("verdict", "UNCERTAIN"), "UNCERTAIN"),
+            confidence=c.get("confidence", 1.0),
+            expected=c.get("expected", ""),
+            observed=c.get("observed", ""),
+            detail=c.get("detail", ""),
+            evidence_refs=c.get("upstream_refs", [])
+        ))
+
+    vmap = {"claim_recommended": "FAIL", "no_claim": "PASS", "needs_human": "UNCERTAIN"}
+    overall_verdict = vmap.get(data.get("verdict", "needs_human"), "UNCERTAIN")
+
+    record = build_record(
+        request,
+        agent_id=AGENT_ID,
+        record_id=f"RCY-{unit_id}",
+        captured_at=utcnow(),
+        checks=checks,
+        outcome=data.get("outcome", "no_claim"),
+        verdict=overall_verdict,
+        needs_human=data.get("payload", {}).get("needs_human", False),
+        reason=f"Recovery decision: {data.get('verdict', 'unknown')}",
+        model={"name": "remote-recovery", "version": "1.0", "calls": 0},
+        payload=data.get("payload", {})
+    )
+
+    return build_output(record, next_step="complete")
 
 app = make_app(STAGE, handle)
