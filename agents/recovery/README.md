@@ -1,44 +1,70 @@
-# agents/recovery/  ·  Recovery Manager
+# agents/recovery/ · Sydon Recovery Manager
 
-**Owner:** Member 5 (Recovery Manager)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
+**Owner:** Nithesh (@nithesh33758) — Member 5 (Recovery Manager)
 
-> **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
+> **Sydon Recovery Manager** is an automated, policy-backed Amazon FBA fee reconciliation engine. It correlates Amazon fee lines against upstream warehouse evidence across Receiving, Prep, Pack, and Returns, producing deterministic, audit-traceable dispute packages while protecting seller account standing.
 
-| | |
+---
+
+## Capabilities & Architecture
+
+| Feature | Detail |
 |---|---|
-| **Reads (inputs)** | Channel fee / reimbursement report lines (no camera) |
-| **Reads (previous evidence)** | **All** earlier records |
-| **Produces** | per-charge position (supports / contradicts / silent), a claim with attached evidence and a dollar figure, and an explicit list of what cannot be claimed and why |
-| **Recommended `check_key`s** | one `charge_<line_id>` check per fee line |
-| **`decision.outcome` values** | `claim_recommended, no_claim, insufficient_evidence, pending_review` |
+| **Inputs** | Amazon fee / reimbursement report lines (no camera) |
+| **Reads** | All upstream evidence records (`previous_evidence`), including operator overrides |
+| **Policy Catalog** | Amazon FBA Dispute Rules (`amazon_rules.json`) covering inbound defect, lost inbound, warehouse damage, returns, and weight tier overcharges |
+| **Semantics** | `FAIL` = Contradicts (Claim) · `PASS` = Supports (No Claim) · `UNCERTAIN` = Silent (Never Claim) |
+| **Precision Philosophy** | Emphasizes claim precision over recall. Ambiguous or silent charges are never filed, protecting the seller's account standing with Amazon |
+| **Traceability** | Every claim cites the upstream `record_id`, verified check keys, and policy rule IDs |
 
-Your check semantics are the one place verdicts read differently: the condition is *"this charge is supported by evidence"*, so `FAIL` = contradicted = **claim**, `UNCERTAIN` = SILENT = **never a claim**. A wrongly filed claim costs a seller standing; a missed one costs only money, so report **precision**. You will meet every contract and data problem first (findings F-07 to F-12): raise them early. In a **Specialist Pod** there is no Prep evidence: inbound-defect charges must be SILENT, not guessed.
+---
 
-## Where your code goes
+## Output Contract & Payload
 
-```text
-agents/recovery/
-├── app.py          ← expose  handle(agent_input: dict) -> dict  (an Agent Output). Keep `app = make_app(...)` to serve over HTTP.
-├── agent.json      ← stage · agent_id · owner · mode (inproc | http) · url · an honest `implementation` description
-├── PROVENANCE.md   ← your Round 2 repo URL + commit this came from (create it)
-├── README.md       ← this file, rewritten
-└── …               ← your Round 2 code, prompts, rules, fixtures
-```
+Outputs adhere strictly to `shared/schemas/agent-output.schema.json` and `shared/schemas/evidence.schema.json`:
 
-## Integrating, in order
+- **Record ID**: `RCY-<subject_id>`
+- **Checks**: One `charge_<line_id>` check per fee line with verdicts (`FAIL` / `PASS` / `UNCERTAIN`)
+- **Payload**:
+  ```json
+  {
+    "charges": [
+      {
+        "line_id": "fee_0014_1",
+        "charge_type": "inbound_defect_fee",
+        "amount_usd": 2.0,
+        "position": "CONTRADICTS",
+        "reason": "Prep evidence confirms unit was fully compliant prior to charge (Rule #2001)",
+        "evidence_record_ids": ["PRP-0014"]
+      }
+    ],
+    "claimable_usd": 2.0,
+    "unclaimable": [ ... ]
+  }
+  ```
 
-1. Read [`INTEGRATION-GUIDE.md`](../../INTEGRATION-GUIDE.md) and [`EVIDENCE-CONTRACT.md`](../../EVIDENCE-CONTRACT.md); open [`examples/end-to-end/`](../../examples/) for a real Agent Output.
-2. In `handle()`: read `request["subject"]`, `request["inputs"]` (your captures) and `request["previous_evidence"]`; run your agent (**one batched model call per unit**); build the record with `shared.utils.records.build_record()` and wrap it with `build_output()`.
-3. **Fail open.** On a model error return `pending_output(...)`, not an exception. Never invent evidence: if you did not see it, say UNCERTAIN with an `uncertain_reason`.
-4. **Refuse other tenants.** Raise `LookupError` (HTTP 404) for a subject that is not under `subject.org_id`.
-5. Make it idempotent: the same `request_id` must yield the same `record_id`. Use the **latest override** of previous evidence (`context.overrides`).
-6. Run `pytest tests/integration/test_agent_contracts.py`, first on the stub (it passes), then on yours, **with your own fixtures**.
-7. Run the whole system: `make run` and `make test`.
+---
 
-## Run on its own
+## How to Run
 
+### In-Process (Default Pod Mode)
+Invoked dynamically by the orchestrator in-process via `handle(request: dict)`.
+
+### Standalone HTTP Service
 ```sh
-.venv/bin/uvicorn agents.recovery.app:app --port 8105
+python -m uvicorn agents.recovery.app:app --port 8105
 curl localhost:8105/health
 ```
-Then set `"mode": "http"` in `agent.json` if you want the orchestrator to call it over HTTP.
+Then set `"mode": "http"` in `agents/recovery/agent.json`.
+
+---
+
+## Testing
+
+```sh
+# Run Recovery contract tests
+pytest tests/integration/test_agent_contracts.py -k recovery
+
+# Run full Pod integration test suite
+pytest
+```
