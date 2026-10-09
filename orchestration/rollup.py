@@ -77,23 +77,21 @@ def derive_final_outcome(workflow: dict, evidence: dict, status: str) -> dict | 
     claimable = rec_pair[1]["payload"].get("claimable_usd") if rec_pair else None
     needs_human = bool(incomplete or asks)
 
-    if rec_claim:
-        outcome, verdict = "CLAIM_RECOMMENDED", "FAIL"
-        reason = f"Recovery contradicted at least one charge (claimable ${claimable or 0:.2f})."
-    elif failed:
-        outcome, verdict = "EXCEPTION", "FAIL"
-        reason = f"Failed verdict from: {', '.join(failed)}; no claim recommended."
-    elif incomplete:
+    if incomplete:
         outcome, verdict = "INCOMPLETE", "UNCERTAIN"
         reason = f"Stage did not complete: {', '.join(incomplete)}."
     elif asks:
         outcome, verdict = "NEEDS_REVIEW", "UNCERTAIN"
         reason = f"Human review requested by: {', '.join(asks)}."
+    elif rec_claim:
+        outcome, verdict = "CLAIM_RECOMMENDED", "FAIL"
+        reason = f"Recovery contradicted at least one charge (claimable ${claimable or 0:.2f})."
+    elif failed:
+        outcome, verdict = "EXCEPTION", "FAIL"
+        reason = f"Failed verdict from: {', '.join(failed)}; no claim recommended."
     else:
         outcome, verdict = "CLEAN", "PASS"
         reason = "All applicable stages passed."
-    if needs_human and outcome in ("CLAIM_RECOMMENDED", "EXCEPTION"):
-        reason += f" Flagged for review: {', '.join(incomplete + asks)}."
     return {
         "workflow_id": workflow["workflow_id"], "outcome": outcome, "verdict": verdict, "reason": reason,
         "needs_human": needs_human, "provisional": status != "COMPLETED",
