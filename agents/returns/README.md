@@ -1,44 +1,61 @@
 # agents/returns/  ·  Returns Manager
 
-**Owner:** Member 4 (Returns Manager)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
+**Owner:** Member 4 (Returns Manager) (`@VrajeshChary`)
 
-> **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
+The Returns Manager inspects returned parcels and customer returns against the product catalog and customer order details. It adapts the Round 3 Agent Contract (`EVIDENCE-CONTRACT.md`) to five specialized inspection engines under `agents/returns/core/agents/`:
+
+1. **VisionAgent**: Analyzes return parcel imagery using Google Gemini / OpenRouter multimodal vision (with PIL image quality guard and strict offline uncertainty fallback).
+2. **IdentityAgent**: Compares physical return evidence against ordered SKU/ASIN using 5-dimensional semantic product matching (category, components, brand, SKU metadata, visual features).
+3. **CompletenessAgent**: Evaluates Bill of Materials (BOM) components and detects missing critical or minor components.
+4. **ConditionAgent**: Grades return condition strictly using Amazon's official published condition scale (`New`, `Used - Like New`, `Used - Very Good`, `Used - Good`, `Used - Acceptable`, `Unacceptable`, or `UNCERTAIN`).
+5. **DispositionAgent**: Commercial policy decision engine mapping inspection findings to dispositions (`restock`, `refurbish`, `liquidate`, `dispose`, or `pending_review`).
 
 | | |
 |---|---|
-| **Reads (inputs)** | Photos of the returned parcel and the expected parts list |
-| **Reads (previous evidence)** | Pack (what was sent), Receiving |
-| **Produces** | identity, completeness, condition, disposition |
-| **Recommended `check_key`s** | `identity_match, completeness, condition` |
+| **Reads (inputs)** | `request["inputs"]` (photos/captures of the return), `request["subject"]`, `request["context"]` |
+| **Reads (previous evidence)** | Pack (what was sent / packed), Receiving (condition on arrival) |
+| **Produces** | `identity_match`, `completeness`, `condition` checks and final `disposition` |
+| **`check_key`s** | `identity_match, completeness, condition` |
 | **`decision.outcome` values** | `restock, refurbish, liquidate, dispose, pending_review` |
 
-Grade condition on **Amazon's published condition scale**: do not invent your own (the Round 2 data leaves `amazon_condition` empty on purpose). The shipped stub does not grade condition (`payload.condition_graded: false`) and copies the operator's disposition: replace it. Returns on FBA-routed units are an open question (finding F-11).
+## Operational Limits & Integration Blockers
 
-## Where your code goes
+1. **Image Reference Resolution & Evidence Integrity (Unresolved Platform Blocker)**:
+   Input references (`inputs[].ref`) are treated as opaque identifiers. No approved resolver, signed URL provider, or object storage service exists in the repository. The adapter only inspects paths strictly contained inside `INPUT_DIR` after verifying against directory traversal (`..`) and symlink escapes; it never searches arbitrary workspace paths.
+
+   To guarantee evidence integrity:
+   - For each return image under `INPUT_DIR`, file bytes are read once into memory.
+   - Its SHA-256 hash is computed from those exact bytes.
+   - If `request.inputs[].sha256` is provided, it is compared against the computed hash. If it does not match, that image is not sent to `VisionAgent`, and an honest `UNCERTAIN` result is returned explaining that the evidence hash did not match.
+   - The verified bytes are handed off directly to `VisionAgent` so the vision model analyzes the exact same bytes that were hashed, preventing TOCTOU file tampering.
+   - Evidence record `inputs` and each check's `evidence_refs` are strictly limited to images whose verified bytes were actually analyzed. If any image is missing, unreadable, or fails hash validation, it is not claimed as analyzed.
+   - Record IDs are deterministically derived from the full `request_id` in a collision-resistant manner using an `RTN-` prefix plus a SHA-256 digest (`RTN-<sha256>`).
+
+2. **Multimodal Provider Batching Status**:
+   Multiple return photos can be combined into a single multimodal payload (`model.calls: 1`) to synthesize multi-angle evidence. However, live multimodal provider batching has not been verified against an external live provider without credentials in this pass; offline execution operates with honest uncertainty and genuine fallback protection. Provider batching is not claimed unless actually verified with live credentials.
+
+3. **Authoritative Tenant Ownership Source (Unresolved Architecture Blocker)**:
+   There is no authoritative subject-to-organization mapping or enterprise tenant registry in the repository. Cross-checking against caller-supplied `previous_evidence` or synthetic `sample_data` does not provide an authoritative guarantee of tenant ownership. The adapter performs sanity checks to satisfy contract and test refusal requirements (`LookupError` → HTTP 404), but full enterprise tenancy enforcement remains an unresolved architectural decision requiring a platform tenant service.
+
+## Structure
 
 ```text
 agents/returns/
-├── app.py          ← expose  handle(agent_input: dict) -> dict  (an Agent Output). Keep `app = make_app(...)` to serve over HTTP.
-├── agent.json      ← stage · agent_id · owner · mode (inproc | http) · url · an honest `implementation` description
-├── PROVENANCE.md   ← your Round 2 repo URL + commit this came from (create it)
-├── README.md       ← this file, rewritten
-└── …               ← your Round 2 code, prompts, rules, fixtures
+├── app.py          ← exposes handle(agent_input: dict) -> dict (Agent Output) and FastAPI app
+├── agent.json      ← manifest (stage, agent_id: "returns-manager@1.0.0", owner: "@VrajeshChary")
+├── PROVENANCE.md   ← Round 2 origin repo and commit tracking
+├── README.md       ← this documentation
+└── core/           ← Returns inspection engines
+    ├── catalog.py  ← Verified product catalog & BOM specifications
+    ├── models.py   ← Core domain models & schemas
+    ├── utils.py    ← Normalization & domain heuristics
+    └── agents/     ← Vision, Identity, Completeness, Condition, Disposition agents
 ```
 
-## Integrating, in order
+## Running the Agent
 
-1. Read [`INTEGRATION-GUIDE.md`](../../INTEGRATION-GUIDE.md) and [`EVIDENCE-CONTRACT.md`](../../EVIDENCE-CONTRACT.md); open [`examples/end-to-end/`](../../examples/) for a real Agent Output.
-2. In `handle()`: read `request["subject"]`, `request["inputs"]` (your captures) and `request["previous_evidence"]`; run your agent (**one batched model call per unit**); build the record with `shared.utils.records.build_record()` and wrap it with `build_output()`.
-3. **Fail open.** On a model error return `pending_output(...)`, not an exception. Never invent evidence: if you did not see it, say UNCERTAIN with an `uncertain_reason`.
-4. **Refuse other tenants.** Raise `LookupError` (HTTP 404) for a subject that is not under `subject.org_id`.
-5. Make it idempotent: the same `request_id` must yield the same `record_id`. Use the **latest override** of previous evidence (`context.overrides`).
-6. Run `pytest tests/integration/test_agent_contracts.py`, first on the stub (it passes), then on yours, **with your own fixtures**.
-7. Run the whole system: `make run` and `make test`.
-
-## Run on its own
-
+Run standalone over HTTP:
 ```sh
-.venv/bin/uvicorn agents.returns.app:app --port 8104
+uvicorn agents.returns.app:app --port 8104
 curl localhost:8104/health
 ```
-Then set `"mode": "http"` in `agent.json` if you want the orchestrator to call it over HTTP.
