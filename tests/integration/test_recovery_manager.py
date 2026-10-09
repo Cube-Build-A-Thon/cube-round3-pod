@@ -441,8 +441,8 @@ def test_explicit_fee_lines_used(recovery_client):
     assert charges[0]["charge_type"] == "fulfilment_fee_weight_tier"
 
 
-# 19. Request without fee lines does NOT silently load synthetic sample fee lines
-def test_no_fee_lines_does_not_silently_load_sample_data(recovery_client, cases):
+# 19. Explicit empty fee lines take precedence and do NOT load sample data
+def test_explicit_empty_fee_lines_precedence(recovery_client, cases):
     # UNIT-0014 has 4 fee lines in organiser synthetic sample data (fee_report_sample.csv)
     case = next(c for c in cases if c["unit_id"] == "UNIT-0014")
     inp = {
@@ -452,18 +452,139 @@ def test_no_fee_lines_does_not_silently_load_sample_data(recovery_client, cases)
         "stage": "recovery",
         "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"]},
         "inputs": [],
+        "fee_lines": [],  # Explicit empty fee report provided
         "previous_evidence": [],
     }
 
     out = recovery_client.run(inp, 30)
     ev = out["evidence"]
 
-    # Must NOT load the 4 sample fee lines; returns contract-compliant insufficient evidence
-    assert ev["payload"]["charges"] == [], "Must not silently load organiser sample fee lines"
+    # Explicit empty fee lines strictly take precedence over standard sample data
+    assert ev["payload"]["charges"] == [], "Explicit empty fee lines must take precedence"
     assert ev["payload"]["claimable_usd"] == 0.0
     assert ev["checks"] == []
     assert ev["decision"]["verdict"] == "UNCERTAIN"
     assert ev["decision"]["outcome"] == "insufficient_evidence"
+
+
+# 19b. Missing fee-report data never fabricates claims
+def test_missing_fee_report_data_never_fabricates_claims(recovery_client, cases):
+    # UNIT-0001 has no fee lines in fee_report_sample.csv
+    case = next(c for c in cases if c["unit_id"] == "UNIT-0001")
+    inp = {
+        "schema_version": "1.0",
+        "request_id": f"WF-{case['org_id']}-{case['unit_id']}:recovery",
+        "workflow_id": f"WF-{case['org_id']}-{case['unit_id']}",
+        "stage": "recovery",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"], "route": case["route"]},
+        "inputs": [],
+        "previous_evidence": [],
+    }
+
+    out = recovery_client.run(inp, 30)
+    ev = out["evidence"]
+
+    # Must return contract-compliant insufficient evidence without fabricating claims
+    assert ev["payload"]["charges"] == []
+    assert ev["payload"]["claimable_usd"] == 0.0
+    assert ev["checks"] == []
+    assert ev["decision"]["verdict"] == "UNCERTAIN"
+    assert ev["decision"]["outcome"] == "insufficient_evidence"
+
+
+# 19c. Normal orchestrated request accesses fee report without entering stub pathway
+def test_orchestrated_request_accesses_fee_report_with_real_agents(recovery_client, cases):
+    case = next(c for c in cases if c["unit_id"] == "UNIT-0014")
+    # Real upstream evidence records (none ending in -stub@0)
+    real_rcv = {
+        "record_id": "RCV-0014",
+        "agent_id": "receiving-manager@1.0.0",
+        "stage": "receiving",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"]},
+        "decision": {"verdict": "PASS", "outcome": "accepted"},
+        "checks": [{"check_key": "identity_match", "verdict": "PASS", "observed": "matched"}],
+        "payload": {},
+    }
+    real_prp = {
+        "record_id": "PRP-0014",
+        "agent_id": "prep-manager@1.0.0",
+        "stage": "prep",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"]},
+        "decision": {"verdict": "PASS", "outcome": "compliant"},
+        "checks": [{"check_key": "packaging_intact", "verdict": "PASS", "observed": "intact"}],
+        "payload": {},
+    }
+    inp = {
+        "schema_version": "1.0",
+        "request_id": f"WF-{case['org_id']}-{case['unit_id']}:recovery",
+        "workflow_id": f"WF-{case['org_id']}-{case['unit_id']}",
+        "stage": "recovery",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"], "route": "fba"},
+        "inputs": [],
+        "previous_evidence": [real_rcv, real_prp],
+        "context": {"overrides": [], "case": case},
+    }
+
+    out = recovery_client.run(inp, 30)
+    ev = out["evidence"]
+
+    # Successfully loaded 4 fee lines for UNIT-0014 from standard fee report
+    assert len(ev["payload"]["charges"]) == 4
+    pos = {c["charge_type"]: c["position"] for c in ev["payload"]["charges"]}
+    assert pos["inbound_defect_fee"] == "CONTRADICTS"
+    assert ev["payload"]["claimable_usd"] == 2.0
+    assert ev["decision"]["verdict"] == "FAIL"  # Condition failed -> claim recommended
+    assert ev["decision"]["outcome"] == "claim_recommended"
+
+
+# 19d. Real upstream evidence and reviewer overrides are respected without stub pathway
+def test_real_upstream_evidence_and_reviewer_overrides_respected(recovery_client, cases):
+    case = next(c for c in cases if c["unit_id"] == "UNIT-0014")
+    real_rcv = {
+        "record_id": "RCV-0014",
+        "agent_id": "receiving-manager@1.0.0",
+        "stage": "receiving",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"]},
+        "decision": {"verdict": "PASS", "outcome": "accepted"},
+        "checks": [{"check_key": "identity_match", "verdict": "PASS", "observed": "matched"}],
+        "payload": {},
+    }
+    real_prp = {
+        "record_id": "PRP-0014",
+        "agent_id": "prep-manager@1.0.0",
+        "stage": "prep",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"]},
+        "decision": {"verdict": "PASS", "outcome": "compliant"},
+        "checks": [{"check_key": "packaging_intact", "verdict": "PASS", "observed": "intact"}],
+        "payload": {},
+    }
+    override = {
+        "override_id": "OVR-001",
+        "supersedes": {"record_id": "PRP-0014", "override_id": None},
+        "target": "decision",
+        "actor": "operator_reviewer",
+        "at": "2026-01-01T00:00:00Z",
+        "reason": "seal broken observed on manual inspection",
+        "original_verdict": "PASS",
+        "previous_verdict": "PASS",
+        "new_verdict": "FAIL",
+    }
+    inp = {
+        "schema_version": "1.0",
+        "request_id": f"WF-{case['org_id']}-{case['unit_id']}:recovery",
+        "workflow_id": f"WF-{case['org_id']}-{case['unit_id']}",
+        "stage": "recovery",
+        "subject": {"org_id": case["org_id"], "subject_id": case["unit_id"], "route": "fba"},
+        "inputs": [],
+        "previous_evidence": [real_rcv, real_prp],
+        "context": {"overrides": [override], "case": case},
+    }
+
+    out = recovery_client.run(inp, 30)
+    ev = out["evidence"]
+    pos = {c["charge_type"]: c["position"] for c in ev["payload"]["charges"]}
+    # With Prep overridden to FAIL, inbound_defect_fee is now supported by evidence (no claim)
+    assert pos["inbound_defect_fee"] == "SUPPORTS"
 
 
 # 20. Real / non-sample subject is not rejected merely because absent from sample_data

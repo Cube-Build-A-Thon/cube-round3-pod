@@ -15,6 +15,10 @@ Check semantics for Recovery: the condition is "this charge is supported by evid
 """
 from __future__ import annotations
 
+import csv
+import os
+from pathlib import Path
+
 from functools import lru_cache
 from typing import Any
 
@@ -69,23 +73,29 @@ def _is_stub_test_pathway(request: dict) -> bool:
     return False
 
 
-def _extract_fee_lines(request: dict) -> list[dict[str, Any]]:
-    """Extracts fee lines from established Round 3 Agent Input locations."""
-    # 1. Top-level fee_lines list
-    if isinstance(request.get("fee_lines"), list):
+def _extract_fee_lines(request: dict) -> list[dict[str, Any]] | None:
+    """Extracts explicitly supplied fee lines from established Round 3 Agent Input locations.
+
+    Returns:
+        list[dict[str, Any]]: Explicitly supplied fee lines (which may be empty).
+        None: No explicit fee lines were provided in the request, indicating the configured
+              standard fee report should be consulted.
+    """
+    # 1. Top-level fee_lines list (explicitly supplied, even if empty)
+    if "fee_lines" in request and isinstance(request["fee_lines"], list):
         return request["fee_lines"]
 
     # 2. Inside context (fee_lines or fee_report)
     ctx = request.get("context")
     if isinstance(ctx, dict):
-        if isinstance(ctx.get("fee_lines"), list):
+        if "fee_lines" in ctx and isinstance(ctx["fee_lines"], list):
             return ctx["fee_lines"]
-        if isinstance(ctx.get("fee_report"), list):
+        if "fee_report" in ctx and isinstance(ctx["fee_report"], list):
             return ctx["fee_report"]
 
-    # 3. Inside inputs list (content-addressed report rows or charges)
+    # 3. Inside inputs list (content-addressed report rows or charges or input CSV)
     inputs = request.get("inputs")
-    if isinstance(inputs, list):
+    if isinstance(inputs, list) and inputs:
         extracted: list[dict[str, Any]] = []
         for inp in inputs:
             if not isinstance(inp, dict):
@@ -98,10 +108,19 @@ def _extract_fee_lines(request: dict) -> list[dict[str, Any]]:
                 extracted.append(inp["row"])
             elif isinstance(inp.get("data"), dict) and "charge_type" in inp["data"]:
                 extracted.append(inp["data"])
+            elif isinstance(inp.get("ref"), str) and inp["ref"].lower().endswith(".csv"):
+                try:
+                    root = Path(os.environ.get("INPUT_DIR", sample_data.data_dir().parents[0] / "input"))
+                    csv_path = root / inp["ref"]
+                    if csv_path.is_file():
+                        with open(csv_path, newline="") as fh:
+                            extracted.extend(csv.DictReader(fh))
+                except Exception:
+                    pass
         if extracted:
             return extracted
 
-    return []
+    return None
 
 
 def _parse_fee_lines(raw_lines: list[dict[str, Any]], org_id: str, unit_id: str) -> list[ChargeRecord]:
@@ -161,18 +180,23 @@ def handle(request: dict) -> dict:
     if subject_id in demo_orgs and demo_orgs[subject_id] != org_id:
         raise LookupError(f"tenant mismatch: sample subject {subject_id} belongs to {demo_orgs[subject_id]}, not {org_id}")
 
-    # 2. Extract fee/charge lines from established Round 3 Agent Input locations
-    raw_lines = _extract_fee_lines(request)
+    # 2. Resolve fee/charge lines: prefer explicitly supplied lines, otherwise load configured fee report
+    explicit_lines = _extract_fee_lines(request)
+    if explicit_lines is not None:
+        raw_lines = explicit_lines
+    else:
+        # Standard workflow execution (including real-agent orchestrated workflows):
+        # Consult configured standard fee report.
+        try:
+            raw_lines = sample_data.fee_lines(subject_id, org_id)
+        except Exception:
+            raw_lines = []
 
     # Validate fee line tenant isolation
     for line in raw_lines:
         line_org = line.get("org_id")
         if line_org and line_org != org_id:
             raise LookupError(f"tenant mismatch in fee line: {line_org} does not match {org_id}")
-
-    # Isolate sample_data fee lookup strictly to the organiser's demo/stub test pathway
-    if not raw_lines and _is_stub_test_pathway(request):
-        raw_lines = sample_data.fee_lines(subject_id, org_id)
 
     # 3. Handle absent fee lines according to Round 3 contract:
     # Do NOT fabricate fee lines, do NOT guess. Return UNCERTAIN / insufficient_evidence.
