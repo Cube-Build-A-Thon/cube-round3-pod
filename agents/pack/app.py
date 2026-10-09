@@ -30,12 +30,13 @@ def _safe_request_id(request_id: str) -> str:
 
 
 def _resolve_input_path(ref: str) -> Path:
-    path = (ROOT_DIR / ref).resolve()
+    input_root = (ROOT_DIR / "data" / "input").resolve()
+    path = (input_root / ref).resolve()
 
     try:
-        path.relative_to(ROOT_DIR)
+        path.relative_to(input_root)
     except ValueError:
-        raise ValueError("Input path is outside the repository.")
+        raise ValueError("Input path is outside the input directory.")
 
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {ref}")
@@ -57,24 +58,26 @@ def _verify_input_hash(
             f"Input hash mismatch for {path.name}."
         )
 
-
 def _get_order_lines(request: dict) -> list:
-    context = request.get("context", {})
-    case = context.get("case", {})
+    context = request.get("context") or {}
+    case = context.get("case") or {}
 
     order_lines = case.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
 
-    subject = request.get("subject", {})
+    subject = request.get("subject") or {}
     order_lines = subject.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
+
+    for item in request.get("inputs") or []:
+        if isinstance(item, dict):
+            payload = item.get("payload") or item
+            if isinstance(payload, dict) and payload.get("order_lines"):
+                return payload["order_lines"]
 
     return []
-
 
 def _format_expected_items(order_lines: list) -> str:
     if not order_lines:
