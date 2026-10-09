@@ -46,6 +46,9 @@ class HttpClient:
     def run(self, request: dict, timeout_s: float) -> dict:
         try:
             resp = httpx.post(f"{self.url}/run", json=request, timeout=timeout_s)
+        except httpx.ConnectTimeout as exc:
+            # Could not even connect (on Windows a closed port times out instead of refusing): the agent is down.
+            raise AgentUnavailable(f"{type(exc).__name__}: {exc}") from exc
         except httpx.TimeoutException as exc:
             raise AgentTimeout(f"{type(exc).__name__}: {exc}") from exc
         except httpx.HTTPError as exc:
