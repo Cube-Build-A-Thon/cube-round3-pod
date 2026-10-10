@@ -74,6 +74,6 @@ hand-picked.
 | UNIT-0008 | 1 wine bottle (order: 1 bottle) | PASS → seal ✅ | 3 | $0.00019 | 30 s |
 | UNIT-0019 | 1 blue towel (order:1 towel) | PASS → seal ✅ | 4 | $0.00019 | 62 s |
 | UNIT-0022 | serum + an extra rabbit toy | FAIL → stop and fix ✅ | 4 | $0.00019 | 87 s |
-| UNIT-0016 | 2 blue towels | ⚠️ timed out twice → FAILED / INCOMPLETE | - | - | >60 s |
+| UNIT-0016 | 2 blue towels | PASS → seal ✅ | 3 | $0.00019 | 46 s |
 
-*Note: UNIT-0016 timed out under the 60-second budget after multiple calls. The Railway deployment needs `GEMINI_MODEL=gemini-3.5-flash-lite` and `GEMINI_BUDGET_SECONDS=120` to complete reliably.*
+
