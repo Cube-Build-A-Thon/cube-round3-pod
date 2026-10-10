@@ -189,11 +189,11 @@ class VisionConfig:
             import dotenv
             env_file = Path(__file__).resolve().parent.parent.parent / ".env"
             if env_file.exists():
-                dotenv.load_dotenv(dotenv_path=env_file, override=True)
+                dotenv.load_dotenv(dotenv_path=env_file, override=False)  # real env (CI, tests) wins over .env
                 self.env_loaded = True
                 self.env_path = str(env_file)
             else:
-                dotenv.load_dotenv(override=True)
+                dotenv.load_dotenv(override=False)
                 self.env_loaded = True
                 self.env_path = "default_env"
         except ImportError:
