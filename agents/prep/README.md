@@ -1,7 +1,7 @@
 # agents/prep/  ·  Prep Manager
 
 **Owner:** Member 2 (Prep Manager; none in Specialist Pods)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
-
+Agent 2 Prep Manager
 > **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
 
 | | |
