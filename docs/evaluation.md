@@ -67,13 +67,13 @@ hand-picked.
 - wrong-tenant output rejected (`tenant_mismatch`);
 - each real agent refusing another tenant's subject.
 
-## Pack Manager (With Photos and API Key)
+## Pack Manager (Live Deployment Results)
 
-| Unit | Expected Verdict | Agent Verdict | Cost (USD) | Latency (ms) | Run Method |
+| Unit | What's in the box | Pack verdict | Model calls | Cost | Time |
 |---|---|---|---|---|---|
-| UNIT-0008 | PASS | PASS | $0.00010 | ~1500 | `make case UNIT=UNIT-0008 ORG=org_demo_alpha` |
-| UNIT-0016 | PASS | PASS | $0.00010 | ~1500 | `make case UNIT=UNIT-0016 ORG=org_demo_alpha` |
-| UNIT-0019 | PASS | PASS | $0.00010 | ~1500 | `make case UNIT=UNIT-0019 ORG=org_demo_alpha` |
-| UNIT-0022 | FAIL (no_extra_items) | FAIL (no_extra_items) | $0.00010 | ~1500 | `make case UNIT=UNIT-0022 ORG=org_demo_alpha` |
+| UNIT-0008 | 1 wine bottle (order: 1 bottle) | PASS → seal ✅ | 3 | $0.00019 | 30 s |
+| UNIT-0019 | 1 blue towel (order:1 towel) | PASS → seal ✅ | 4 | $0.00019 | 62 s |
+| UNIT-0022 | serum + an extra rabbit toy | FAIL → stop and fix ✅ | 4 | $0.00019 | 87 s |
+| UNIT-0016 | 2 blue towels | ⚠️ timed out twice → FAILED / INCOMPLETE | - | - | >60 s |
 
-*Note: These tests verify basic functionality on 4 specific units with photos. Do not claim accuracy beyond these 4 units.*
+*Note: UNIT-0016 timed out under the 60-second budget after multiple calls. The Railway deployment needs `GEMINI_MODEL=gemini-3.5-flash-lite` and `GEMINI_BUDGET_SECONDS=120` to complete reliably.*
