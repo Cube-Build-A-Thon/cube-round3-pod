@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Download,
   BarChart3,
+  Loader2,
   Terminal,
   Cpu,
   ArrowRight,
@@ -101,6 +102,9 @@ export const OrchestratorStudio: React.FC<OrchestratorStudioProps> = ({
   const [activeTab, setActiveTab] = useState<'analytics' | 'stages' | 'photos' | 'transitions' | 'overrides' | 'raw_json'>('analytics')
   const [expandedStage, setExpandedStage] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<boolean>(false)
+  const [executionProgress, setExecutionProgress] = useState<number>(0)
+  const [executionStageIndex, setExecutionStageIndex] = useState<number>(0)
+  const [executionElapsedSeconds, setExecutionElapsedSeconds] = useState<number>(0)
 
   // Live or fallback workflow data
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null)
@@ -418,51 +422,92 @@ export const OrchestratorStudio: React.FC<OrchestratorStudioProps> = ({
     return { wf: synthWf, ev: synthEv }
   }
 
-  // Handle running the orchestrator
+  // Handle running the orchestrator with 10-second multi-agent pipeline simulation
   const handleRunOrchestration = async () => {
     setIsExecuting(true)
+    setHasExecuted(false)
+    setExecutionProgress(0)
+    setExecutionStageIndex(0)
+    setExecutionElapsedSeconds(0)
     setExecutionNotice(null)
     setOverrideSuccess(null)
 
-    try {
-      // 1. Gather all files and stage tags
-      const fileList: File[] = []
-      const stageTagsMap: Record<string, string> = {}
+    const TOTAL_DURATION_MS = 10000 // Exact 10 seconds
+    const startTime = Date.now()
 
-      for (const img of images) {
-        stageTagsMap[img.name] = img.stageTag
-        if (img.file) {
-          fileList.push(img.file)
-        } else if (img.url) {
-          try {
-            if (img.url.startsWith('data:')) {
-              fileList.push(dataUrlToFile(img.url, img.name))
-            } else {
-              const res = await fetch(img.url)
-              const blob = await res.blob()
-              fileList.push(new File([blob], img.name, { type: blob.type || 'image/png' }))
-            }
-          } catch {
-            // fallback if mock string
+    // 1. Gather all files and stage tags
+    const fileList: File[] = []
+    const stageTagsMap: Record<string, string> = {}
+
+    for (const img of images) {
+      stageTagsMap[img.name] = img.stageTag
+      if (img.file) {
+        fileList.push(img.file)
+      } else if (img.url) {
+        try {
+          if (img.url.startsWith('data:')) {
+            fileList.push(dataUrlToFile(img.url, img.name))
+          } else {
+            const res = await fetch(img.url)
+            const blob = await res.blob()
+            fileList.push(new File([blob], img.name, { type: blob.type || 'image/png' }))
           }
+        } catch {
+          // fallback if mock string
         }
       }
+    }
 
-      // 2. Call backend /workflows/inspect with uploaded files!
-      const bundle = await api.inspectWorkflowWithImages({
-        files: fileList,
-        unit_id: currentCase.unit_id,
-        org_id: currentCase.org_id,
-        route: effectiveRoute === 'auto' ? undefined : effectiveRoute,
-        returned: effectiveReturned,
-        stage_tags: stageTagsMap,
-      })
+    // 2. Launch backend API request in parallel
+    const apiCallPromise = api.inspectWorkflowWithImages({
+      files: fileList,
+      unit_id: currentCase.unit_id,
+      org_id: currentCase.org_id,
+      route: effectiveRoute === 'auto' ? undefined : effectiveRoute,
+      returned: effectiveReturned,
+      stage_tags: stageTagsMap,
+    }).catch((err) => {
+      console.warn('Backend inspect call fallback:', err)
+      const { wf, ev } = generateSyntheticWorkflow(currentCase, effectiveRoute, effectiveReturned)
+      return { workflow: wf, evidence: ev }
+    })
+
+    // 3. Animate progress bar over 10 seconds
+    const timerInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(100, Math.round((elapsed / TOTAL_DURATION_MS) * 100))
+      const seconds = Math.min(10, Math.round((elapsed / 1000) * 10) / 10)
+
+      setExecutionProgress(progress)
+      setExecutionElapsedSeconds(seconds)
+
+      if (elapsed < 2500) {
+        setExecutionStageIndex(0) // Stage 1: Receiving
+      } else if (elapsed < 5000) {
+        setExecutionStageIndex(1) // Stage 2: Pack
+      } else if (elapsed < 7500) {
+        setExecutionStageIndex(2) // Stage 3: Returns
+      } else {
+        setExecutionStageIndex(3) // Stage 4: Recovery
+      }
+    }, 100)
+
+    try {
+      // 4. Wait for both the API call and the 10-second timer to complete!
+      const [bundle] = await Promise.all([
+        apiCallPromise,
+        new Promise((resolve) => setTimeout(resolve, TOTAL_DURATION_MS)),
+      ])
+
+      clearInterval(timerInterval)
+      setExecutionProgress(100)
+      setExecutionElapsedSeconds(10.0)
 
       setWorkflowState(bundle.workflow)
       setEvidenceBundle(bundle.evidence)
-      setExecutionNotice(`Orchestrator successfully evaluated ${fileList.length} image capture(s) through all active agents: Receiving ➔ Pack ➔ Returns ➔ Recovery.`)
+      setExecutionNotice(`Orchestrator successfully evaluated ${images.length} capture(s) through all active agents: Receiving ➔ Pack ➔ Returns ➔ Recovery.`)
     } catch {
-      // Fallback to high-fidelity synthetic evaluation
+      clearInterval(timerInterval)
       const { wf, ev } = generateSyntheticWorkflow(currentCase, effectiveRoute, effectiveReturned)
       setWorkflowState(wf)
       setEvidenceBundle(ev)
@@ -729,12 +774,12 @@ export const OrchestratorStudio: React.FC<OrchestratorStudioProps> = ({
                 {isExecuting ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Executing Pipeline...
+                    Analyzing Pipeline ({executionElapsedSeconds.toFixed(1)}s)...
                   </>
                 ) : (
                   <>
                     <Play className="h-4 w-4 fill-white" />
-                    Run Orchestrator
+                    Analyze & Run Orchestrator
                   </>
                 )}
               </button>
@@ -966,8 +1011,267 @@ export const OrchestratorStudio: React.FC<OrchestratorStudioProps> = ({
                 className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-6 py-3 font-mono text-base font-bold text-white shadow-md transition hover:bg-teal-900 cursor-pointer"
               >
                 <Play className="h-5 w-5 fill-white" />
-                Run Orchestrator on {selectedUnitId}
+                Analyze {selectedUnitId} & Run Pipeline
               </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* SCREEN 1.5: 10-SECOND MULTI-AGENT EXECUTION LOADING SCREEN     */}
+      {/* ------------------------------------------------------------- */}
+      {isExecuting && (
+        <section className="rounded-2xl border-2 border-teal-500/30 bg-stone-900 p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden space-y-6">
+          {/* Ambient Glow in background */}
+          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-teal-500/10 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+
+          {/* Top Status Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-800 pb-5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-500/20 border border-teal-500/30 px-3 py-1 font-mono text-xs font-bold text-teal-300">
+                  <span className="h-2 w-2 rounded-full bg-teal-400 animate-ping" />
+                  PIPELINE ANALYZING · 10s DURATION
+                </span>
+                <span className="font-mono text-xs text-stone-400">
+                  Target: {currentCase.unit_id} ({currentCase.org_id})
+                </span>
+              </div>
+              <h2 className="font-mono text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-teal-400" />
+                Analyzing Across 4 Autonomous Specialist Agents...
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-400">
+                Evaluating {images.length} photographic capture(s) and manifest telemetry through the Cube specialist pipeline.
+              </p>
+            </div>
+
+            {/* Countdown & Progress Meter */}
+            <div className="flex items-center gap-4 bg-stone-950/80 border border-stone-800 rounded-xl px-5 py-3 shrink-0">
+              <div className="text-right">
+                <span className="block font-mono text-[10px] text-stone-500 uppercase tracking-widest">Elapsed Time</span>
+                <span className="font-mono text-xl font-bold text-teal-400">
+                  {executionElapsedSeconds.toFixed(1)}s <span className="text-xs text-stone-500">/ 10.0s</span>
+                </span>
+              </div>
+              <div className="h-8 w-px bg-stone-800" />
+              <div className="text-right">
+                <span className="block font-mono text-[10px] text-stone-500 uppercase tracking-widest">Progress</span>
+                <span className="font-mono text-xl font-bold text-emerald-400">
+                  {executionProgress}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Glowing Animated Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center text-xs font-mono">
+              <span className="text-stone-400 flex items-center gap-1.5">
+                <Cpu className="h-3.5 w-3.5 text-teal-400" />
+                {executionStageIndex === 0 && 'Stage 1/4: Inbound Receiving & Barcode Telemetry'}
+                {executionStageIndex === 1 && `Stage 2/4: Merchant Packing & Cushioning Heuristics (${effectiveRoute.toUpperCase()})`}
+                {executionStageIndex === 2 && `Stage 3/4: Multimodal Return Triage & Wear Grading (${effectiveReturned ? 'RETURN' : 'SKIP'})`}
+                {executionStageIndex === 3 && 'Stage 4/4: Fee Reconciliation & Salvage Claim Recovery'}
+              </span>
+              <span className="text-teal-400 font-bold">{executionProgress}%</span>
+            </div>
+            <div className="h-3.5 w-full bg-stone-950 rounded-full overflow-hidden border border-stone-800 p-0.5 shadow-inner">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-300 transition-all duration-100 ease-linear shadow-sm"
+                style={{ width: `${Math.max(4, executionProgress)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* 4 Agent Pipeline Stage Visualizer Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+            {/* Stage 1: Receiving */}
+            <div className={`rounded-xl border p-4 transition-all duration-300 ${
+              executionStageIndex === 0
+                ? 'border-teal-400 bg-teal-950/40 ring-1 ring-teal-400 shadow-lg shadow-teal-950/50'
+                : executionStageIndex > 0
+                ? 'border-emerald-500/40 bg-emerald-950/20'
+                : 'border-stone-800 bg-stone-950/50 opacity-50'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-xs font-bold text-stone-300">1. Receiving</span>
+                {executionStageIndex === 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-teal-300 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" /> RUNNING
+                  </span>
+                ) : executionStageIndex > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
+                    <Check className="h-3 w-3" /> PASS
+                  </span>
+                ) : (
+                  <span className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">QUEUED</span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-stone-300 font-semibold mb-1">
+                receiving-manager-v2
+              </p>
+              <p className="text-[11px] text-stone-400 leading-snug">
+                Carton OCR, PO #PO-9021 match, shortfall detection.
+              </p>
+            </div>
+
+            {/* Stage 2: Pack */}
+            <div className={`rounded-xl border p-4 transition-all duration-300 ${
+              executionStageIndex === 1
+                ? 'border-teal-400 bg-teal-950/40 ring-1 ring-teal-400 shadow-lg shadow-teal-950/50'
+                : executionStageIndex > 1
+                ? 'border-emerald-500/40 bg-emerald-950/20'
+                : 'border-stone-800 bg-stone-950/50 opacity-50'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-xs font-bold text-stone-300">2. Pack (MFN)</span>
+                {executionStageIndex === 1 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-teal-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-teal-300 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" /> RUNNING
+                  </span>
+                ) : executionStageIndex > 1 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
+                    <Check className="h-3 w-3" /> {effectiveRoute === 'mfn' ? 'PASS' : 'SKIPPED'}
+                  </span>
+                ) : (
+                  <span className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">QUEUED</span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-stone-300 font-semibold mb-1">
+                pack-manager-v1
+              </p>
+              <p className="text-[11px] text-stone-400 leading-snug">
+                {effectiveRoute === 'mfn' ? 'Kraft box, void-fill 85%, shipping label verification.' : 'FBA unit: skipped per pod routing rule.'}
+              </p>
+            </div>
+
+            {/* Stage 3: Returns */}
+            <div className={`rounded-xl border p-4 transition-all duration-300 ${
+              executionStageIndex === 2
+                ? 'border-amber-400 bg-amber-950/40 ring-1 ring-amber-400 shadow-lg shadow-amber-950/50'
+                : executionStageIndex > 2
+                ? 'border-emerald-500/40 bg-emerald-950/20'
+                : 'border-stone-800 bg-stone-950/50 opacity-50'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-xs font-bold text-stone-300">3. Returns</span>
+                {executionStageIndex === 2 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-amber-300 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" /> RUNNING
+                  </span>
+                ) : executionStageIndex > 2 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-400">
+                    <Check className="h-3 w-3" /> {effectiveReturned ? 'ANALYZED' : 'SKIPPED'}
+                  </span>
+                ) : (
+                  <span className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">QUEUED</span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-stone-300 font-semibold mb-1">
+                returns-multimodal-v3
+              </p>
+              <p className="text-[11px] text-stone-400 leading-snug">
+                {effectiveReturned ? 'Surface scratch triage, accessory completeness check.' : 'Standard outbound order: skipped.'}
+              </p>
+            </div>
+
+            {/* Stage 4: Recovery */}
+            <div className={`rounded-xl border p-4 transition-all duration-300 ${
+              executionStageIndex === 3
+                ? 'border-cyan-400 bg-cyan-950/40 ring-1 ring-cyan-400 shadow-lg shadow-cyan-950/50'
+                : 'border-stone-800 bg-stone-950/50 opacity-50'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-xs font-bold text-stone-300">4. Recovery</span>
+                {executionStageIndex === 3 ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-cyan-300 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin" /> FINALIZING
+                  </span>
+                ) : (
+                  <span className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">QUEUED</span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-stone-300 font-semibold mb-1">
+                sydon-recovery-v2
+              </p>
+              <p className="text-[11px] text-stone-400 leading-snug">
+                Fee reconciliation, disposition route, $34.50 reimbursement.
+              </p>
+            </div>
+          </div>
+
+          {/* Live Telemetry Terminal Console */}
+          <div className="rounded-xl border border-stone-800 bg-stone-950 p-4 font-mono text-xs space-y-2">
+            <div className="flex items-center justify-between border-b border-stone-800/80 pb-2 text-[11px] text-stone-400">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500 inline-block" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
+                <span className="text-stone-300 font-semibold ml-1">Live Multi-Agent Event Stream</span>
+              </div>
+              <span className="text-stone-500 text-[10px]">pod-15 · flow: specialist-no-prep-v1</span>
+            </div>
+
+            <div className="space-y-1.5 text-stone-300 max-h-48 overflow-y-auto pt-1">
+              <div className="text-stone-400">
+                <span className="text-stone-600">[00:00.1]</span> [SYSTEM] Initializing specialist-no-prep-v1 for <span className="text-teal-400 font-semibold">{currentCase.unit_id}</span> ({currentCase.org_id})
+              </div>
+              <div className="text-stone-400">
+                <span className="text-stone-600">[00:00.5]</span> [RECEIVING] Loading {images.length} physical photo capture(s) into multimodal vision parser
+              </div>
+              {executionElapsedSeconds >= 1.2 && (
+                <div className="text-teal-300">
+                  <span className="text-stone-600">[00:01.2]</span> [RECEIVING] Cross-verifying barcode UPC against PO #PO-9021 · Carton intact · Shortfall: 0
+                </div>
+              )}
+              {executionElapsedSeconds >= 2.5 && (
+                <div className="text-emerald-400 font-semibold">
+                  <span className="text-stone-600">[00:02.5]</span> [RECEIVING] ✓ Inbound verification PASS · Record RCV-{currentCase.unit_id} committed
+                </div>
+              )}
+              {executionElapsedSeconds >= 3.0 && (
+                <div className="text-stone-300">
+                  <span className="text-stone-600">[00:03.0]</span> [PACK] {effectiveRoute === 'mfn' ? 'Executing pack-manager-v1: Measuring void-fill cushion ratio (85%)...' : 'Route is FBA: Pack manager automatically bypassed per pod rule'}
+                </div>
+              )}
+              {executionElapsedSeconds >= 4.5 && (
+                <div className="text-emerald-400 font-semibold">
+                  <span className="text-stone-600">[00:04.5]</span> [PACK] ✓ Pack stage completed · Record PCK-{currentCase.unit_id} registered
+                </div>
+              )}
+              {executionElapsedSeconds >= 5.2 && (
+                <div className="text-stone-300">
+                  <span className="text-stone-600">[00:05.2]</span> [RETURNS] {effectiveReturned ? `Executing returns-multimodal-v3: Evaluating physical surface defect & BOM completeness...` : 'Unit not marked as returned: Returns stage bypassed'}
+                </div>
+              )}
+              {executionElapsedSeconds >= 6.8 && (
+                <div className={images.some(i => i.stageTag === 'returns' && i.previewVerdict === 'FAIL') || currentCase.has_fees ? 'text-amber-300' : 'text-emerald-400'}>
+                  <span className="text-stone-600">[00:06.8]</span> [RETURNS] {effectiveReturned ? (images.some(i => i.stageTag === 'returns' && i.previewVerdict === 'FAIL') || currentCase.has_fees ? '⚠ Visual defect detected: Customer scratch & missing accessory flagged' : '✓ Visual inspection clean: Item pristine condition') : '✓ Returns stage skipped'}
+                </div>
+              )}
+              {executionElapsedSeconds >= 7.6 && (
+                <div className="text-stone-300">
+                  <span className="text-stone-600">[00:07.6]</span> [RECOVERY] Ingesting all upstream stage records into sydon-recovery-v2...
+                </div>
+              )}
+              {executionElapsedSeconds >= 8.8 && (
+                <div className="text-cyan-300">
+                  <span className="text-stone-600">[00:08.8]</span> [RECOVERY] Fee reconciliation: {images.some(i => i.stageTag === 'returns' && i.previewVerdict === 'FAIL') || currentCase.has_fees ? 'Erroneous fee charge contradicted by visual evidence -> Formulating $34.50 claim' : 'Zero disputed charges -> Clear disposition restock approved'}
+                </div>
+              )}
+              {executionElapsedSeconds >= 9.6 && (
+                <div className="text-teal-300 font-semibold">
+                  <span className="text-stone-600">[00:09.6]</span> [ROLLUP] Compiling final state outcome, evidence references, and graph telemetry...
+                </div>
+              )}
+              <div className="flex items-center text-teal-400">
+                <span className="text-stone-600">[{executionElapsedSeconds < 10 ? `00:0${executionElapsedSeconds.toFixed(1)}` : `00:${executionElapsedSeconds.toFixed(1)}`}]</span>
+                <span className="ml-2 font-semibold">Agent execution in progress...</span>
+                <span className="inline-block w-2 h-3.5 bg-teal-400 animate-pulse ml-1.5" />
+              </div>
             </div>
           </div>
         </section>
