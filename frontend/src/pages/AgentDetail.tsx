@@ -111,9 +111,7 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
           </span>
         </div>
 
-        <PackInspector
-          onNavigateToAgents={() => onNavigate('agents')}
-        />
+        <PackInspector onNavigateToAgents={() => onNavigate('agents')} />
 
         <nav aria-label="Agent stage navigation" className="flex items-center justify-between border-t border-stone-300/80 pt-4">
           {previousAgent ? (

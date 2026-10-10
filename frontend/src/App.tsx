@@ -93,15 +93,7 @@ export const App: React.FC = () => {
 
         {currentPage === 'analyze' && (
           <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
-            {activeWorkflow ? (
-              <WorkflowReport
-                key={activeWorkflow.workflow_id}
-                initialWorkflow={activeWorkflow}
-                onAnalyzeAnother={() => setActiveWorkflow(null)}
-              />
-            ) : (
-              <AnalyzeItem onWorkflowComplete={handleWorkflowComplete} />
-            )}
+            <AnalyzeItem />
           </div>
         )}
 

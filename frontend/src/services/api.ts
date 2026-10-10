@@ -25,6 +25,43 @@ export function resolveApiUrl(pathOrUrl: string): string {
   return `${API_BASE_URL}${cleanPath}`
 }
 
+export function dataUrlToFile(dataUrl: string, filename: string): File {
+  if (dataUrl.startsWith('data:image/svg+xml')) {
+    const rawSvg = decodeURIComponent(dataUrl.replace(/^data:image\/svg\+xml(?:;utf8)?,/, ''))
+    return new File([rawSvg], filename, { type: 'image/svg+xml' })
+  }
+  try {
+    const arr = dataUrl.split(',')
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png'
+    const bstr = atob(arr[1])
+    let n = bstr.length
+    const u8arr = new Uint8Array(n)
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n)
+    }
+    return new File([u8arr], filename, { type: mime })
+  } catch {
+    return new File([dataUrl], filename, { type: 'text/plain' })
+  }
+}
+
+export async function resilientFetch(urlPath: string, init?: RequestInit): Promise<Response> {
+  const url = `${API_BASE_URL}${urlPath.startsWith('/') ? urlPath : `/${urlPath}`}`
+  try {
+    return await fetch(url, init)
+  } catch (err: any) {
+    if (API_BASE_URL === '/api') {
+      try {
+        const directUrl = `http://127.0.0.1:8100${urlPath.startsWith('/') ? urlPath : `/${urlPath}`}`
+        return await fetch(directUrl, init)
+      } catch {
+        // preserve original error
+      }
+    }
+    throw err
+  }
+}
+
 export class ApiError extends Error {
   status: number
   detail: string
@@ -80,7 +117,7 @@ export const api = {
 
   async getHealth(): Promise<HealthResponse> {
     try {
-      const res = await fetch(`${API_BASE_URL}/health`)
+      const res = await resilientFetch('/health')
       return await handleResponse<HealthResponse>(res)
     } catch (err: any) {
       if (err instanceof ApiError) throw err
@@ -101,7 +138,7 @@ export const api = {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/workflows`, {
+      const res = await resilientFetch('/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -115,7 +152,7 @@ export const api = {
 
   async getWorkflow(workflowId: string): Promise<WorkflowState> {
     try {
-      const res = await fetch(`${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}`)
+      const res = await resilientFetch(`/workflows/${encodeURIComponent(workflowId)}`)
       return await handleResponse<WorkflowState>(res)
     } catch (err: any) {
       if (err instanceof ApiError) throw err
@@ -125,7 +162,7 @@ export const api = {
 
   async getWorkflowEvidence(workflowId: string): Promise<EvidenceBundle> {
     try {
-      const res = await fetch(`${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/evidence`)
+      const res = await resilientFetch(`/workflows/${encodeURIComponent(workflowId)}/evidence`)
       return await handleResponse<EvidenceBundle>(res)
     } catch (err: any) {
       if (err instanceof ApiError) throw err
@@ -135,7 +172,7 @@ export const api = {
 
   async resumeWorkflow(workflowId: string): Promise<WorkflowState> {
     try {
-      const res = await fetch(`${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/resume`, {
+      const res = await resilientFetch(`/workflows/${encodeURIComponent(workflowId)}/resume`, {
         method: 'POST',
       })
       return await handleResponse<WorkflowState>(res)
@@ -147,7 +184,7 @@ export const api = {
 
   async submitOverride(workflowId: string, params: OverrideParams): Promise<WorkflowState> {
     try {
-      const res = await fetch(`${API_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/overrides`, {
+      const res = await resilientFetch(`/workflows/${encodeURIComponent(workflowId)}/overrides`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
@@ -210,7 +247,7 @@ export const api = {
       if (params.order_id) formData.append('order_id', params.order_id)
       if (params.org_id) formData.append('org_id', params.org_id)
 
-      const res = await fetch(`${API_BASE_URL}/returns/inspect`, {
+      const res = await resilientFetch('/returns/inspect', {
         method: 'POST',
         body: formData,
         signal,
@@ -227,7 +264,7 @@ export const api = {
 
   async getCatalog(): Promise<CatalogProduct[]> {
     try {
-      const res = await fetch(`${API_BASE_URL}/returns/catalog`)
+      const res = await resilientFetch('/returns/catalog')
       return await handleResponse<CatalogProduct[]>(res)
     } catch (err: any) {
       if (err instanceof ApiError) throw err
@@ -237,7 +274,7 @@ export const api = {
 
   async getWarehouseRecords(): Promise<WarehouseReturnRecord[]> {
     try {
-      const res = await fetch(`${API_BASE_URL}/returns/warehouse-records`)
+      const res = await resilientFetch('/returns/warehouse-records')
       const records = await handleResponse<WarehouseReturnRecord[]>(res)
       return records.map((rec) => ({
         ...rec,
@@ -254,7 +291,7 @@ export const api = {
 
   async getReturnSamples(): Promise<Array<{ filename: string; size_bytes: number; url: string }>> {
     try {
-      const res = await fetch(`${API_BASE_URL}/returns/samples`)
+      const res = await resilientFetch('/returns/samples')
       const items = await handleResponse<Array<{ filename: string; size_bytes: number; url: string }>>(res)
       return items.map((item) => ({
         ...item,
@@ -288,7 +325,7 @@ export const api = {
       if (params.unit_id) formData.append('unit_id', params.unit_id)
       if (params.org_id) formData.append('org_id', params.org_id)
 
-      const res = await fetch(`${API_BASE_URL}/pack/inspect`, {
+      const res = await resilientFetch('/pack/inspect', {
         method: 'POST',
         body: formData,
         signal,
@@ -302,4 +339,52 @@ export const api = {
       throw new ApiError(0, 'Unable to connect to Pack Manager.', err.message)
     }
   },
+
+  async inspectWorkflowWithImages(
+    params: {
+      file?: File | null
+      files?: File[]
+      unit_id: string
+      org_id: string
+      route?: string
+      returned?: boolean | string
+      stage_tags?: Record<string, string>
+    },
+    signal?: AbortSignal
+  ): Promise<EvidenceBundle> {
+    try {
+      const formData = new FormData()
+      if (params.file) {
+        formData.append('file', params.file)
+      }
+      if (params.files && params.files.length > 0) {
+        params.files.forEach((f) => formData.append('files', f))
+      }
+      formData.append('unit_id', params.unit_id)
+      formData.append('org_id', params.org_id)
+      if (params.route && params.route !== 'auto') {
+        formData.append('route', params.route)
+      }
+      if (params.returned !== undefined && params.returned !== 'auto') {
+        formData.append('returned', String(params.returned))
+      }
+      if (params.stage_tags) {
+        formData.append('stage_tags', JSON.stringify(params.stage_tags))
+      }
+
+      const res = await resilientFetch('/workflows/inspect', {
+        method: 'POST',
+        body: formData,
+        signal,
+      })
+      return await handleResponse<EvidenceBundle>(res)
+    } catch (err: any) {
+      if (err instanceof ApiError) throw err
+      if (err.name === 'AbortError') {
+        throw new ApiError(408, 'Pipeline analysis timed out. Please try again.', 'timeout')
+      }
+      throw new ApiError(0, 'Unable to connect to Orchestrator Pipeline.', err.message)
+    }
+  },
 }
+

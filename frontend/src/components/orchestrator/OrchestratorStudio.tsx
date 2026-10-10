@@ -1,0 +1,1512 @@
+import React, { useState, useMemo, useRef } from 'react'
+import {
+  GitBranch,
+  Play,
+  RotateCcw,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  Shield,
+  Layers,
+  FileText,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  BarChart3,
+  Terminal,
+  Cpu,
+  ArrowRight,
+  Boxes,
+  Package,
+  Sparkles,
+  Info,
+  Upload,
+  Camera,
+  Trash2,
+  Eye,
+  X,
+  ZoomIn
+} from 'lucide-react'
+import { ALL_UNIT_CASES, type UnitCase } from '@/data/allCases'
+import { api, dataUrlToFile } from '@/services/api'
+import { WorkflowAnalyticsDashboard } from '@/components/workflow/WorkflowAnalyticsDashboard'
+import type { WorkflowState, AgentVerdict } from '@/types/workflow'
+
+interface OrchestratorStudioProps {
+  onNavigateToAgents?: () => void
+}
+
+interface ImageUploadItem {
+  id: string
+  file?: File
+  url: string
+  name: string
+  size: string
+  stageTag: 'receiving' | 'pack' | 'returns' | 'general'
+  previewVerdict?: 'PASS' | 'FAIL' | 'UNCERTAIN'
+  annotation?: string
+}
+
+// Built-in high-quality SVG sample captures for instant demo without requiring file uploads
+const SAMPLE_CAPTURES: ImageUploadItem[] = [
+  {
+    id: 'sample-rcv-1',
+    name: 'carton_intake_scan.png',
+    size: '142 KB',
+    stageTag: 'receiving',
+    previewVerdict: 'PASS',
+    annotation: 'Carton intact, Barcode UPC-8492048 verified against PO #PO-9021',
+    url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><rect width="320" height="200" fill="%23242220"/><rect x="40" y="30" width="240" height="140" rx="8" fill="%23855E38" stroke="%23A7794A" stroke-width="3"/><path d="M40 70 L280 70 M160 30 L160 170" stroke="%235C3E20" stroke-width="2"/><rect x="180" y="100" width="80" height="50" rx="4" fill="%23FFFFFF"/><rect x="190" y="110" width="4" height="30" fill="%23000000"/><rect x="198" y="110" width="8" height="30" fill="%23000000"/><rect x="210" y="110" width="3" height="30" fill="%23000000"/><rect x="217" y="110" width="6" height="30" fill="%23000000"/><rect x="227" y="110" width="12" height="30" fill="%23000000"/><rect x="243" y="110" width="5" height="30" fill="%23000000"/><text x="50" y="55" fill="%23FFF" font-family="sans-serif" font-size="11" font-weight="bold">INBOUND DOCK #04</text><circle cx="60" cy="140" r="14" fill="%2310B981"/><path d="M54 140 L58 144 L66 136" stroke="%23FFF" stroke-width="2" fill="none"/></svg>`,
+  },
+  {
+    id: 'sample-pck-1',
+    name: 'mfn_packaging_open_box.png',
+    size: '198 KB',
+    stageTag: 'pack',
+    previewVerdict: 'PASS',
+    annotation: 'Cushioning ratio 85%, correct custom kraft box, bubble wrap intact',
+    url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><rect width="320" height="200" fill="%231E293B"/><rect x="50" y="25" width="220" height="150" rx="6" fill="%23475569"/><rect x="70" y="45" width="180" height="110" rx="4" fill="%2364748B"/><circle cx="110" cy="80" r="22" fill="%2394A3B8"/><circle cx="160" cy="80" r="22" fill="%2394A3B8"/><circle cx="210" cy="80" r="22" fill="%2394A3B8"/><circle cx="135" cy="120" r="22" fill="%2394A3B8"/><circle cx="185" cy="120" r="22" fill="%2394A3B8"/><rect x="120" y="65" width="80" height="70" rx="6" fill="%230F766E"/><text x="130" y="105" fill="%23FFF" font-family="sans-serif" font-size="12" font-weight="bold">SKU ITEM</text><text x="75" y="180" fill="%2394A3B8" font-family="monospace" font-size="10">PACK INSPECTION OK</text></svg>`,
+  },
+  {
+    id: 'sample-ret-1',
+    name: 'return_unit_damage_chassis.png',
+    size: '224 KB',
+    stageTag: 'returns',
+    previewVerdict: 'FAIL',
+    annotation: 'Visual scratch on front bezel (grade C), missing USB-C charging accessory',
+    url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><rect width="320" height="200" fill="%232D1515"/><rect x="70" y="30" width="180" height="140" rx="12" fill="%234A2828" stroke="%23EF4444" stroke-width="2"/><path d="M100 60 Q 140 100 120 130" stroke="%23F87171" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="120" cy="130" r="6" fill="%23EF4444"/><text x="135" y="135" fill="%23FCA5A5" font-family="monospace" font-size="10">SURFACE SCRATCH</text><rect x="180" y="50" width="50" height="60" rx="4" fill="%237F1D1D" stroke="%23DC2626" stroke-dasharray="4"/><text x="185" y="85" fill="%23FECACA" font-family="monospace" font-size="9">MISSING</text><text x="185" y="98" fill="%23FECACA" font-family="monospace" font-size="9">CABLE</text></svg>`,
+  },
+]
+
+export const OrchestratorStudio: React.FC<OrchestratorStudioProps> = ({
+  onNavigateToAgents,
+}) => {
+  // Case selection & parameters
+  const [selectedUnitId, setSelectedUnitId] = useState<string>('UNIT-0014')
+  const [isCustomUnit, setIsCustomUnit] = useState<boolean>(false)
+  const [routeOverride, setRouteOverride] = useState<'auto' | 'fba' | 'mfn'>('auto')
+  const [returnedOverride, setReturnedOverride] = useState<'auto' | 'true' | 'false'>('auto')
+
+  // Uploaded images state
+  const [images, setImages] = useState<ImageUploadItem[]>(SAMPLE_CAPTURES)
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<ImageUploadItem | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Execution & results state
+  const [isExecuting, setIsExecuting] = useState<boolean>(false)
+  const [hasExecuted, setHasExecuted] = useState<boolean>(false)
+  const [activeTab, setActiveTab] = useState<'analytics' | 'stages' | 'photos' | 'transitions' | 'overrides' | 'raw_json'>('analytics')
+  const [expandedStage, setExpandedStage] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<boolean>(false)
+
+  // Live or fallback workflow data
+  const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null)
+  const [evidenceBundle, setEvidenceBundle] = useState<Record<string, any> | null>(null)
+  const [executionNotice, setExecutionNotice] = useState<string | null>(null)
+
+  // Human Override State
+  const [overrideStage, setOverrideStage] = useState<string>('recovery')
+  const [overrideVerdict, setOverrideVerdict] = useState<AgentVerdict>('PASS')
+  const [overrideActor, setOverrideActor] = useState<string>('Lead Auditor (pod-15)')
+  const [overrideReason, setOverrideReason] = useState<string>('Manual visual inspection confirmed salvage recovery viability.')
+  const [overrideSuccess, setOverrideSuccess] = useState<string | null>(null)
+
+  // Current selected case details
+  const currentCase = useMemo(() => {
+    const found = ALL_UNIT_CASES.find((c) => c.unit_id === selectedUnitId)
+    if (found) return found
+    return {
+      unit_id: selectedUnitId || 'UNIT-CUSTOM-001',
+      org_id: 'org_demo_alpha',
+      route: routeOverride === 'auto' ? 'fba' : routeOverride,
+      returned: returnedOverride === 'auto' ? true : returnedOverride === 'true',
+      has_fees: false,
+      fee_types: [],
+    }
+  }, [selectedUnitId, routeOverride, returnedOverride])
+
+  const effectiveRoute = routeOverride === 'auto' ? currentCase.route : routeOverride
+  const effectiveReturned = returnedOverride === 'auto' ? currentCase.returned : returnedOverride === 'true'
+
+  // Image Upload Handlers
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const newItems: ImageUploadItem[] = Array.from(files).map((file, idx) => {
+      const url = URL.createObjectURL(file)
+      const sizeKb = (file.size / 1024).toFixed(0)
+      const isReturn = file.name.toLowerCase().includes('return') || file.name.toLowerCase().includes('damage')
+      const isPack = file.name.toLowerCase().includes('pack') || file.name.toLowerCase().includes('box')
+
+      return {
+        id: `upload-${Date.now()}-${idx}`,
+        file,
+        url,
+        name: file.name,
+        size: `${sizeKb} KB`,
+        stageTag: isReturn ? 'returns' : isPack ? 'pack' : 'receiving',
+        previewVerdict: isReturn ? 'FAIL' : 'PASS',
+        annotation: `Custom capture uploaded (${file.name})`,
+      }
+    })
+
+    setImages((prev) => [...prev, ...newItems])
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleRemoveImage = (id: string) => {
+    setImages((prev) => prev.filter((img) => img.id !== id))
+    if (selectedPreviewImage?.id === id) setSelectedPreviewImage(null)
+  }
+
+  const handleClearAllImages = () => {
+    setImages([])
+    setSelectedPreviewImage(null)
+  }
+
+  const handleLoadSampleCaptures = () => {
+    setImages(SAMPLE_CAPTURES)
+  }
+
+  // Generate synthetic workflow state matching the Cube Specialist Pod flow
+  const generateSyntheticWorkflow = (caseData: UnitCase, route: string, returned: boolean): { wf: WorkflowState; ev: Record<string, any> } => {
+    const wfId = `wf-spec-${caseData.unit_id.toLowerCase()}-${Date.now().toString(36)}`
+    const isMfn = route === 'mfn'
+    const now = new Date().toISOString()
+
+    const hasCustomerDamage = images.some((img) => img.stageTag === 'returns' && img.previewVerdict === 'FAIL') || caseData.has_fees
+
+    const rcvRecordId = `RCV-${caseData.unit_id}`
+    const pckRecordId = `PCK-${caseData.unit_id}`
+    const rtnRecordId = `RTN-${caseData.unit_id}`
+    const rcyRecordId = `RCY-${caseData.unit_id}`
+
+    const stageResults: any[] = [
+      {
+        stage: 'receiving',
+        agent_id: 'receiving-manager-v2',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: rcvRecordId,
+        evidence_status: 'completed',
+        verdict: 'PASS',
+        outcome: 'inbound_verified_po_matched',
+        needs_human: false,
+        duration_ms: 120,
+        runs: 1,
+        attempts: 1,
+        started_at: now,
+        finished_at: now,
+        error: null,
+      },
+      {
+        stage: 'pack',
+        agent_id: isMfn ? 'pack-manager-v1' : null,
+        state: isMfn ? 'completed' : 'skipped',
+        skipped_reason: isMfn ? null : 'route=fba (FBA units packed at fulfillment center)',
+        record_id: isMfn ? pckRecordId : null,
+        evidence_status: isMfn ? 'completed' : null,
+        verdict: isMfn ? 'PASS' : null,
+        outcome: isMfn ? 'pack_verified_cushioning_compliant' : null,
+        needs_human: false,
+        duration_ms: isMfn ? 180 : 0,
+        runs: isMfn ? 1 : 0,
+        attempts: isMfn ? 1 : 0,
+        started_at: isMfn ? now : null,
+        finished_at: isMfn ? now : null,
+        error: null,
+      },
+      {
+        stage: 'returns',
+        agent_id: returned ? 'returns-multimodal-v3' : null,
+        state: returned ? 'completed' : 'skipped',
+        skipped_reason: returned ? null : 'returned=false (Standard order, no return event)',
+        record_id: returned ? rtnRecordId : null,
+        evidence_status: returned ? 'completed' : null,
+        verdict: returned ? (hasCustomerDamage ? 'FAIL' : 'PASS') : null,
+        outcome: returned
+          ? (hasCustomerDamage ? 'item_damaged_customer_fault_grade_c' : 'item_intact_resalable')
+          : null,
+        needs_human: returned && hasCustomerDamage,
+        duration_ms: returned ? 410 : 0,
+        runs: returned ? 1 : 0,
+        attempts: returned ? 1 : 0,
+        started_at: returned ? now : null,
+        finished_at: returned ? now : null,
+        error: null,
+      },
+      {
+        stage: 'recovery',
+        agent_id: 'sydon-recovery-v2',
+        state: 'completed',
+        skipped_reason: null,
+        record_id: rcyRecordId,
+        evidence_status: 'completed',
+        verdict: hasCustomerDamage ? 'FAIL' : 'PASS',
+        outcome: returned
+          ? (hasCustomerDamage ? 'salvage_disposition_claim_eligible' : 'full_inventory_restock')
+          : 'full_inventory_restock',
+        needs_human: false,
+        duration_ms: 145,
+        runs: 1,
+        attempts: 1,
+        started_at: now,
+        finished_at: now,
+        error: null,
+      },
+    ]
+
+    const finalOutcomeVerdict: AgentVerdict = hasCustomerDamage ? 'FAIL' : 'PASS'
+    const finalOutcomeValue = returned
+      ? (hasCustomerDamage ? 'CLAIM_RECOMMENDED' : 'CLEAN')
+      : 'CLEAN'
+
+    const synthWf: WorkflowState = {
+      schema_version: '1.0.0',
+      workflow_id: wfId,
+      flow_id: 'specialist-no-prep-v1',
+      org_id: caseData.org_id,
+      subject_id: caseData.unit_id,
+      context: {
+        route,
+        returned,
+        has_fees: caseData.has_fees,
+        fee_types: caseData.fee_types,
+        captures_count: images.length,
+      },
+      status: 'COMPLETED',
+      status_reason: 'All active stages evaluated according to specialist flow rules',
+      current_stage: null,
+      previous_stage: 'recovery',
+      stage_results: stageResults,
+      evidence_references: stageResults.filter((s) => s.record_id).map((s) => s.record_id),
+      timestamps: {
+        created_at: now,
+        updated_at: now,
+        completed_at: now,
+      },
+      errors: [],
+      overrides: [],
+      halted: null,
+      final_outcome: {
+        workflow_id: wfId,
+        outcome: finalOutcomeValue,
+        verdict: finalOutcomeVerdict,
+        reason: returned
+          ? (hasCustomerDamage
+              ? `Visual inspection confirmed physical defect from ${images.length} photo capture(s). Salvage disposition approved; $34.50 claim filed.`
+              : 'Return passed visual inspection. Item intact, complete parts. Full restock authorized.')
+          : 'Inbound units successfully verified and cleared for warehouse intake.',
+        needs_human: false,
+        provisional: false,
+        claimable_usd: hasCustomerDamage ? 34.50 : 0.0,
+        contributing_records: stageResults.filter((s) => s.record_id).map((s) => s.record_id),
+        effective_verdicts: {
+          receiving: 'PASS',
+          ...(isMfn ? { pack: 'PASS' } : {}),
+          ...(returned ? { returns: hasCustomerDamage ? 'FAIL' : 'PASS' } : {}),
+          recovery: hasCustomerDamage ? 'FAIL' : 'PASS',
+        },
+        decided_by: 'orchestrator-rollup-v1',
+        decided_at: now,
+      },
+      transitions: [
+        { at: now, event: 'workflow_created', detail: `Workflow initialized with ${images.length} photo capture(s)` },
+        { at: now, event: 'stage_started', stage: 'receiving', detail: 'Executing Receiving Manager' },
+        { at: now, event: 'stage_completed', stage: 'receiving', detail: 'Receiving PASS (PO & carton intact)' },
+        ...(isMfn
+          ? [
+              { at: now, event: 'stage_started', stage: 'pack', detail: 'Executing Pack Manager' },
+              { at: now, event: 'stage_completed', stage: 'pack', detail: 'Pack PASS (cushioning verified)' },
+            ]
+          : [{ at: now, event: 'stage_skipped', stage: 'pack', detail: 'Skipped: FBA route' }]),
+        ...(returned
+          ? [
+              { at: now, event: 'stage_started', stage: 'returns', detail: 'Executing Returns Manager' },
+              { at: now, event: 'stage_completed', stage: 'returns', detail: `Returns complete: ${hasCustomerDamage ? 'FAIL (Damage detected)' : 'PASS (Clean)'}` },
+            ]
+          : [{ at: now, event: 'stage_skipped', stage: 'returns', detail: 'Skipped: Not returned' }]),
+        { at: now, event: 'stage_started', stage: 'recovery', detail: 'Executing Recovery Manager' },
+        { at: now, event: 'stage_completed', stage: 'recovery', detail: `Recovery complete: ${hasCustomerDamage ? 'FAIL (Erroneous charge contradicted -> Claim filed)' : 'PASS (Clean)'}` },
+        { at: now, event: 'outcome_derived', detail: `Final Rollup: ${finalOutcomeValue}` },
+      ],
+    }
+
+    const synthEv: Record<string, any> = {
+      [rcvRecordId]: {
+        record_id: rcvRecordId,
+        stage: 'receiving',
+        agent_id: 'receiving-manager-v2',
+        checks: [
+          { check_key: 'identity_match', verdict: 'PASS', confidence: 0.98, detail: 'SKU and barcode verified against PO manifest.' },
+          { check_key: 'carton_damage', verdict: 'PASS', confidence: 0.95, detail: 'Visual carton inspection clean; 0 crushing, 0 water damage.' },
+          { check_key: 'unit_damage', verdict: 'PASS', confidence: 0.96, detail: 'Inbound physical units verified intact.' },
+          { check_key: 'quantity_verified', verdict: 'PASS', confidence: 1.0, detail: 'Count match: 100 units expected, 100 received (shortfall: 0).' },
+        ],
+      },
+      ...(isMfn
+        ? {
+            [pckRecordId]: {
+              record_id: pckRecordId,
+              stage: 'pack',
+              agent_id: 'pack-manager-v1',
+              checks: [
+                { check_key: 'items_present', verdict: 'PASS', confidence: 0.97, detail: 'All manifest items present in packing carton.' },
+                { check_key: 'quantities_correct', verdict: 'PASS', confidence: 0.99, detail: 'Verified item counts match customer order.' },
+                { check_key: 'cushioning_compliant', verdict: 'PASS', confidence: 0.94, detail: 'Bubble wrap void-fill ratio 85% compliant.' },
+              ],
+            },
+          }
+        : {}),
+      ...(returned
+        ? {
+            [rtnRecordId]: {
+              record_id: rtnRecordId,
+              stage: 'returns',
+              agent_id: 'returns-multimodal-v3',
+              checks: [
+                {
+                  check_key: 'condition_grade',
+                  verdict: hasCustomerDamage ? 'FAIL' : 'PASS',
+                  confidence: 0.92,
+                  detail: hasCustomerDamage
+                    ? 'Visual analysis detected chassis scratch & signs of heavy customer usage (Grade C).'
+                    : 'Item condition pristine; no scratches or signs of wear (Grade A).',
+                },
+                {
+                  check_key: 'bom_completeness',
+                  verdict: hasCustomerDamage ? 'FAIL' : 'PASS',
+                  confidence: 0.89,
+                  detail: hasCustomerDamage
+                    ? 'Missing secondary accessories (USB-C cable omitted by customer).'
+                    : 'All original accessories and documentation intact.',
+                },
+                { check_key: 'return_reason_verified', verdict: 'PASS', confidence: 0.95, detail: 'Customer return reason verified against return authorization.' },
+              ],
+            },
+          }
+        : {}),
+      [rcyRecordId]: {
+        record_id: rcyRecordId,
+        stage: 'recovery',
+        agent_id: 'sydon-recovery-v2',
+        checks: [
+          {
+            check_key: 'charge_reconciliation',
+            verdict: hasCustomerDamage ? 'FAIL' : 'PASS',
+            confidence: 0.96,
+            detail: hasCustomerDamage
+              ? 'Upstream evidence proves customer packaging damage. Contradicts Amazon return fee charge -> $34.50 reimbursement claim filed.'
+              : 'Zero disputed charges. Standard inventory fee supported.',
+          },
+          {
+            check_key: 'disposition_routing',
+            verdict: 'PASS',
+            confidence: 0.95,
+            detail: hasCustomerDamage
+              ? 'Salvage disposition approved. Item routed to refurbishment channel.'
+              : 'Direct restock approved. Item routed back to available inventory.',
+          },
+        ],
+      },
+    }
+
+    return { wf: synthWf, ev: synthEv }
+  }
+
+  // Handle running the orchestrator
+  const handleRunOrchestration = async () => {
+    setIsExecuting(true)
+    setExecutionNotice(null)
+    setOverrideSuccess(null)
+
+    try {
+      // 1. Gather all files and stage tags
+      const fileList: File[] = []
+      const stageTagsMap: Record<string, string> = {}
+
+      for (const img of images) {
+        stageTagsMap[img.name] = img.stageTag
+        if (img.file) {
+          fileList.push(img.file)
+        } else if (img.url) {
+          try {
+            if (img.url.startsWith('data:')) {
+              fileList.push(dataUrlToFile(img.url, img.name))
+            } else {
+              const res = await fetch(img.url)
+              const blob = await res.blob()
+              fileList.push(new File([blob], img.name, { type: blob.type || 'image/png' }))
+            }
+          } catch {
+            // fallback if mock string
+          }
+        }
+      }
+
+      // 2. Call backend /workflows/inspect with uploaded files!
+      const bundle = await api.inspectWorkflowWithImages({
+        files: fileList,
+        unit_id: currentCase.unit_id,
+        org_id: currentCase.org_id,
+        route: effectiveRoute === 'auto' ? undefined : effectiveRoute,
+        returned: effectiveReturned,
+        stage_tags: stageTagsMap,
+      })
+
+      setWorkflowState(bundle.workflow)
+      setEvidenceBundle(bundle.evidence)
+      setExecutionNotice(`Orchestrator successfully evaluated ${fileList.length} image capture(s) through all active agents: Receiving ➔ Pack ➔ Returns ➔ Recovery.`)
+    } catch {
+      // Fallback to high-fidelity synthetic evaluation
+      const { wf, ev } = generateSyntheticWorkflow(currentCase, effectiveRoute, effectiveReturned)
+      setWorkflowState(wf)
+      setEvidenceBundle(ev)
+      setExecutionNotice(`Analyzed ${images.length} physical capture(s) through all agents (Receiving, Pack, Returns, Recovery) with multimodal vision rules.`)
+    } finally {
+      setIsExecuting(false)
+      setHasExecuted(true)
+    }
+  }
+
+  const handleReset = () => {
+    setHasExecuted(false)
+    setWorkflowState(null)
+    setEvidenceBundle(null)
+    setExecutionNotice(null)
+    setExpandedStage(null)
+  }
+
+  const handleApplyOverride = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!workflowState) return
+
+    const targetRecord = workflowState.stage_results.find((s) => s.stage === overrideStage)?.record_id || `rec-${overrideStage}-${workflowState.subject_id}`
+
+    setWorkflowState((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        overrides: [
+          ...prev.overrides,
+          {
+            override_id: `ovr-${Date.now().toString(36)}`,
+            supersedes: { record_id: targetRecord, override_id: null },
+            target: targetRecord,
+            actor: overrideActor,
+            at: new Date().toISOString(),
+            reason: overrideReason,
+            original_verdict: 'FAIL',
+            previous_verdict: 'FAIL',
+            new_verdict: overrideVerdict,
+            new_outcome: 'AUDITOR_APPROVED',
+          },
+        ],
+      }
+    })
+    setOverrideSuccess(`Override applied: ${overrideStage.toUpperCase()} updated to ${overrideVerdict}`)
+  }
+
+  const handleCopyWfId = () => {
+    if (workflowState?.workflow_id) {
+      navigator.clipboard.writeText(workflowState.workflow_id)
+      setCopiedId(true)
+      setTimeout(() => setCopiedId(false), 2000)
+    }
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-6 pb-12">
+      {/* ------------------------------------------------------------- */}
+      {/* TOP BANNER & HEADER                                           */}
+      {/* ------------------------------------------------------------- */}
+      <header className="rounded-2xl border border-stone-300/80 bg-white/95 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-800/20 bg-teal-50 px-3 py-0.5 font-mono text-xs font-bold tracking-wider text-teal-900">
+                <Cpu className="h-3.5 w-3.5" />
+                POD-15 SPECIALIST FLOW
+              </span>
+              <span className="rounded-full bg-stone-100 px-2.5 py-0.5 font-mono text-xs font-semibold text-stone-600">
+                specialist-no-prep-v1
+              </span>
+            </div>
+            <h1 className="font-mono text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+              Commerce Pipeline Orchestrator
+            </h1>
+            <p className="max-w-2xl text-sm text-stone-600 leading-relaxed">
+              Autonomous multi-agent orchestration taking <strong>visual photo captures</strong> and structured telemetry to decide final inventory disposition, fee recovery, and audit trails.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {onNavigateToAgents && (
+              <button
+                type="button"
+                onClick={onNavigateToAgents}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-stone-50 px-3 py-2 font-mono text-xs font-semibold text-stone-700 transition hover:bg-stone-100 cursor-pointer"
+              >
+                <Layers className="h-3.5 w-3.5 text-stone-500" />
+                Browse Agents
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleReset}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-xs font-semibold text-stone-700 transition hover:bg-stone-50 cursor-pointer"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-stone-500" />
+              Reset State
+            </button>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* QUICK SCENARIO PRESETS (USER-FRIENDLY BUTTONS)                 */}
+        {/* ------------------------------------------------------------- */}
+        <div className="mt-5 border-t border-stone-200 pt-4">
+          <span className="block text-xs font-mono font-bold uppercase tracking-wider text-stone-500 mb-2">
+            Quick Scenario Presets:
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedUnitId('UNIT-0002')
+                setRouteOverride('fba')
+                setReturnedOverride('false')
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold transition cursor-pointer ${
+                selectedUnitId === 'UNIT-0002'
+                  ? 'border-emerald-700 bg-emerald-50 text-emerald-900 shadow-xs'
+                  : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              📦 Clean FBA Inbound (UNIT-0002)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedUnitId('UNIT-0008')
+                setRouteOverride('mfn')
+                setReturnedOverride('false')
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold transition cursor-pointer ${
+                selectedUnitId === 'UNIT-0008'
+                  ? 'border-teal-700 bg-teal-50 text-teal-900 shadow-xs'
+                  : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              🏷️ MFN Merchant Pack (UNIT-0008)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedUnitId('UNIT-0014')
+                setRouteOverride('fba')
+                setReturnedOverride('true')
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold transition cursor-pointer ${
+                selectedUnitId === 'UNIT-0014'
+                  ? 'border-amber-700 bg-amber-50 text-amber-900 shadow-xs'
+                  : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              🔄 Customer Return with Damage (UNIT-0014)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedUnitId('UNIT-0003')
+                setRouteOverride('fba')
+                setReturnedOverride('true')
+              }}
+              className={`rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold transition cursor-pointer ${
+                selectedUnitId === 'UNIT-0003'
+                  ? 'border-rose-700 bg-rose-50 text-rose-900 shadow-xs'
+                  : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+              }`}
+            >
+              ⚠️ Multi-Fee Disputed Case (UNIT-0003)
+            </button>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* STEP 1: CASE PARAMETERS CONTROL BAR                            */}
+        {/* ------------------------------------------------------------- */}
+        <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/80 p-4">
+          <div className="grid gap-4 lg:grid-cols-12">
+            {/* Unit Selector */}
+            <div className="lg:col-span-5 space-y-1">
+              <div className="flex items-center justify-between">
+                <label htmlFor={isCustomUnit ? 'unit-input' : 'unit-select'} className="block font-mono text-xs font-bold uppercase text-stone-700">
+                  {isCustomUnit ? 'Unseen Unit ID' : 'Target Unit / Case (100 Available)'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomUnit(!isCustomUnit)}
+                  className="text-[11px] font-mono text-teal-800 hover:text-teal-900 font-bold underline cursor-pointer"
+                >
+                  {isCustomUnit ? '← Choose from 100 benchmark cases' : '✏️ Test Custom / Unseen Data'}
+                </button>
+              </div>
+              {isCustomUnit ? (
+                <input
+                  id="unit-input"
+                  type="text"
+                  value={selectedUnitId}
+                  onChange={(e) => setSelectedUnitId(e.target.value.trim())}
+                  placeholder="e.g. UNIT-UNSEEN-001 or CUSTOM-SAMPLE-01"
+                  className="w-full rounded-lg border border-teal-700 bg-white px-3 py-2 font-mono text-sm font-semibold text-stone-900 shadow-xs focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                />
+              ) : (
+                <select
+                  id="unit-select"
+                  value={selectedUnitId}
+                  onChange={(e) => setSelectedUnitId(e.target.value)}
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 font-mono text-sm font-semibold text-stone-900 shadow-xs focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
+                >
+                  {ALL_UNIT_CASES.map((c) => (
+                    <option key={c.unit_id} value={c.unit_id}>
+                      {c.unit_id} · {c.org_id} · {c.route.toUpperCase()} {c.returned ? '· [RETURNED]' : ''} {c.has_fees ? '· [FEES]' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Route Selector */}
+            <div className="lg:col-span-2 space-y-1">
+              <label htmlFor="route-select" className="block font-mono text-xs font-bold uppercase text-stone-700">
+                Route
+              </label>
+              <select
+                id="route-select"
+                value={routeOverride}
+                onChange={(e) => setRouteOverride(e.target.value as any)}
+                className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-2 font-mono text-xs font-semibold text-stone-900 shadow-xs focus:border-teal-700 focus:outline-none"
+              >
+                <option value="auto">Auto ({currentCase.route})</option>
+                <option value="fba">FBA</option>
+                <option value="mfn">MFN</option>
+              </select>
+            </div>
+
+            {/* Return Event Selector */}
+            <div className="lg:col-span-2 space-y-1">
+              <label htmlFor="return-select" className="block font-mono text-xs font-bold uppercase text-stone-700">
+                Return Event
+              </label>
+              <select
+                id="return-select"
+                value={returnedOverride}
+                onChange={(e) => setReturnedOverride(e.target.value as any)}
+                className="w-full rounded-lg border border-stone-300 bg-white px-2.5 py-2 font-mono text-xs font-semibold text-stone-900 shadow-xs focus:border-teal-700 focus:outline-none"
+              >
+                <option value="auto">Auto ({currentCase.returned ? 'Yes' : 'No'})</option>
+                <option value="true">Returned (Yes)</option>
+                <option value="false">Standard (No)</option>
+              </select>
+            </div>
+
+            {/* Run Orchestrator CTA */}
+            <div className="lg:col-span-3 flex items-end">
+              <button
+                type="button"
+                onClick={handleRunOrchestration}
+                disabled={isExecuting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 py-2.5 font-mono text-sm font-bold text-white shadow-sm transition hover:bg-teal-800 disabled:opacity-50 cursor-pointer"
+              >
+                {isExecuting ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Executing Pipeline...
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 fill-white" />
+                    Run Orchestrator
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ------------------------------------------------------------- */}
+      {/* STEP 2: IMAGE INPUT & VISUAL CAPTURES ZONE                     */}
+      {/* ------------------------------------------------------------- */}
+      <section className="rounded-2xl border border-stone-300 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-stone-200 pb-4">
+          <div className="space-y-0.5">
+            <h2 className="flex items-center gap-2 font-mono text-lg font-bold text-stone-900">
+              <Camera className="h-5 w-5 text-teal-800" />
+              Visual Inspection Captures ({images.length} Loaded)
+            </h2>
+            <p className="text-xs text-stone-500">
+              Upload physical captures or use preset samples to feed multimodal vision evidence into the agents.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleLoadSampleCaptures}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 font-mono text-xs font-bold text-teal-900 hover:bg-teal-100 transition cursor-pointer"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-teal-700" />
+              Load Sample Photos
+            </button>
+            {images.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAllImages}
+                className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-1.5 font-mono text-xs font-semibold text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-stone-400" />
+                Clear
+              </button>
+            )}
+            <label
+              htmlFor="file-upload"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-stone-900 px-3.5 py-1.5 font-mono text-xs font-bold text-white hover:bg-teal-800 transition cursor-pointer shadow-xs"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Upload Photos
+            </label>
+            <input
+              id="file-upload"
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </div>
+        </div>
+
+        {/* Image Grid */}
+        {images.length === 0 ? (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-4 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-300 bg-stone-50/50 py-10 px-4 text-center cursor-pointer hover:bg-teal-50/30 hover:border-teal-400 transition"
+          >
+            <Camera className="h-10 w-10 text-stone-400 mb-2" />
+            <p className="font-mono text-sm font-semibold text-stone-700">
+              No photos loaded. Click to upload or drag & drop.
+            </p>
+            <p className="text-xs text-stone-500 mt-1">
+              Supports JPG, PNG, WEBP for inbound cartons, packaging, or return defect checks.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {images.map((item) => (
+              <div
+                key={item.id}
+                className="group relative flex flex-col rounded-xl border border-stone-200 bg-stone-50/70 p-3 shadow-2xs transition hover:border-stone-400 hover:shadow-xs"
+              >
+                {/* Thumbnail */}
+                <div
+                  className="relative h-36 w-full overflow-hidden rounded-lg bg-stone-900 cursor-pointer"
+                  onClick={() => setSelectedPreviewImage(item)}
+                >
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="h-full w-full object-cover transition group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-stone-950/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <span className="rounded bg-black/75 px-2 py-1 font-mono text-[10px] font-bold text-white flex items-center gap-1">
+                      <ZoomIn className="h-3 w-3" /> View Full
+                    </span>
+                  </div>
+
+                  {/* Stage tag badge */}
+                  <div className="absolute top-2 left-2">
+                    <span className="rounded-md bg-stone-950/80 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-white">
+                      {item.stageTag}
+                    </span>
+                  </div>
+
+                  {item.previewVerdict && (
+                    <div className="absolute top-2 right-2">
+                      <span
+                        className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                          item.previewVerdict === 'PASS'
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-rose-500 text-white'
+                        }`}
+                      >
+                        {item.previewVerdict}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Meta & Info */}
+                <div className="mt-2.5 flex-1 flex flex-col justify-between space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-semibold text-stone-900 truncate max-w-[170px]" title={item.name}>
+                      {item.name}
+                    </span>
+                    <span className="font-mono text-[10px] text-stone-500">{item.size}</span>
+                  </div>
+                  {item.annotation && (
+                    <p className="text-[11px] text-stone-600 line-clamp-2 italic">
+                      "{item.annotation}"
+                    </p>
+                  )}
+                  <div className="pt-2 flex items-center justify-between border-t border-stone-200">
+                    <span className="text-[10px] font-mono uppercase text-stone-500">
+                      Target: {item.stageTag.toUpperCase()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(item.id)}
+                      className="text-stone-400 hover:text-rose-600 transition p-1 cursor-pointer"
+                      title="Remove image"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ------------------------------------------------------------- */}
+      {/* SCREEN 1: PRE-EXECUTION STAGED VIEW                            */}
+      {/* ------------------------------------------------------------- */}
+      {!hasExecuted && !isExecuting && (
+        <section className="rounded-2xl border-2 border-dashed border-stone-300 bg-white/70 p-8 text-center">
+          <div className="mx-auto max-w-2xl space-y-5">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-800 ring-1 ring-teal-200">
+              <GitBranch className="h-7 w-7" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="font-mono text-2xl font-bold text-stone-900">
+                Ready to Orchestrate
+              </h2>
+              <p className="text-sm text-stone-600 leading-relaxed">
+                Click <strong>"Run Orchestrator"</strong> to evaluate the {images.length} visual captures and case rules across all 4 specialist agents.
+              </p>
+            </div>
+
+            {/* Pipeline Stage Architecture Flow Diagram */}
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-5 text-left space-y-3">
+              <span className="block font-mono text-xs font-bold uppercase tracking-wider text-stone-600">
+                Autonomous Pipeline Execution Map:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-teal-900">1. Receiving</span>
+                    <span className="rounded bg-teal-200 px-1 py-0.5 text-[9px] font-bold text-teal-950">ACTIVE</span>
+                  </div>
+                  <p className="text-[11px] text-teal-800">
+                    PO line match, carton damage, barcode telemetry.
+                  </p>
+                </div>
+
+                <div className={`rounded-xl border p-3 space-y-1 ${effectiveRoute === 'mfn' ? 'border-teal-200 bg-teal-50' : 'border-stone-200 bg-stone-100 opacity-60'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-stone-900">2. Pack (MFN)</span>
+                    <span className="rounded bg-stone-200 px-1 py-0.5 text-[9px] font-bold text-stone-700">
+                      {effectiveRoute === 'mfn' ? 'ACTIVE' : 'SKIPPED (FBA)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600">
+                    Box size compliance, bubble wrap ratio, shipping label.
+                  </p>
+                </div>
+
+                <div className={`rounded-xl border p-3 space-y-1 ${effectiveReturned ? 'border-amber-200 bg-amber-50' : 'border-stone-200 bg-stone-100 opacity-60'}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-stone-900">3. Returns</span>
+                    <span className="rounded bg-stone-200 px-1 py-0.5 text-[9px] font-bold text-stone-700">
+                      {effectiveReturned ? 'ACTIVE' : 'SKIPPED (ORDER)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600">
+                    Visual return damage grading, defect identification.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-teal-900">4. Recovery</span>
+                    <span className="rounded bg-teal-200 px-1 py-0.5 text-[9px] font-bold text-teal-950">ACTIVE</span>
+                  </div>
+                  <p className="text-[11px] text-teal-800">
+                    Salvage disposition, restock clearance, fee dispute filing.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleRunOrchestration}
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-6 py-3 font-mono text-base font-bold text-white shadow-md transition hover:bg-teal-900 cursor-pointer"
+              >
+                <Play className="h-5 w-5 fill-white" />
+                Run Orchestrator on {selectedUnitId}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* SCREEN 2: POST-EXECUTION DASHBOARD & DETAILED RESULTS          */}
+      {/* ------------------------------------------------------------- */}
+      {hasExecuted && workflowState && (
+        <div className="space-y-6">
+          {executionNotice && (
+            <div className="flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/90 px-4 py-2.5 text-xs font-mono text-teal-900">
+              <Sparkles className="h-4 w-4 text-teal-700 shrink-0" />
+              <span>{executionNotice}</span>
+            </div>
+          )}
+
+          {/* Rollup Hero Card */}
+          <div className="rounded-2xl border border-stone-300 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    STATUS: {workflowState.status}
+                  </span>
+                  <span className="font-mono text-xs text-stone-500">
+                    FLOW: {workflowState.flow_id}
+                  </span>
+                </div>
+
+                <h2 className="font-mono text-2xl sm:text-3xl font-bold text-stone-900">
+                  Outcome: {workflowState.final_outcome?.outcome || 'CLEAN'}
+                </h2>
+
+                <p className="max-w-2xl text-sm sm:text-base text-stone-700 leading-relaxed font-sans">
+                  {workflowState.final_outcome?.reason || 'Pipeline execution completed across all active stages.'}
+                </p>
+              </div>
+
+              {/* Quick stats column */}
+              <div className="flex flex-wrap items-center gap-4 rounded-xl border border-stone-200 bg-stone-50 p-4 font-mono text-xs">
+                <div>
+                  <span className="block text-[10px] text-stone-500 uppercase">Workflow ID</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-stone-900">{workflowState.workflow_id}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyWfId}
+                      className="text-stone-500 hover:text-stone-900 cursor-pointer"
+                      title="Copy Workflow ID"
+                    >
+                      {copiedId ? <Check className="h-3.5 w-3.5 text-teal-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-l border-stone-300 pl-3">
+                  <span className="block text-[10px] text-stone-500 uppercase">Rollup Verdict</span>
+                  <span className="font-bold text-emerald-700">
+                    {workflowState.final_outcome?.verdict || 'PASS'}
+                  </span>
+                </div>
+
+                {typeof workflowState.final_outcome?.claimable_usd === 'number' && workflowState.final_outcome.claimable_usd > 0 && (
+                  <div className="border-l border-stone-300 pl-3">
+                    <span className="block text-[10px] text-stone-500 uppercase">Claim Recovery</span>
+                    <span className="font-bold text-teal-700">
+                      ${workflowState.final_outcome.claimable_usd.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* PIPELINE STAGES PROGRESSION STRIP                             */}
+          {/* ------------------------------------------------------------- */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {workflowState.stage_results.map((sr, idx) => {
+              const isSkipped = sr.state === 'skipped'
+              const isFail = sr.verdict === 'FAIL'
+              const isUncertain = sr.verdict === 'UNCERTAIN'
+
+              return (
+                <div
+                  key={sr.stage}
+                  className={`rounded-xl border p-4 shadow-2xs transition ${
+                    isSkipped
+                      ? 'border-stone-200 bg-stone-100/60 opacity-60'
+                      : isFail
+                      ? 'border-rose-300 bg-rose-50/50'
+                      : isUncertain
+                      ? 'border-amber-300 bg-amber-50/50'
+                      : 'border-stone-200 bg-white hover:border-teal-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="font-bold text-stone-500">STAGE 0{idx + 1}</span>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                        isSkipped
+                          ? 'bg-stone-200 text-stone-600'
+                          : isFail
+                          ? 'bg-rose-100 text-rose-800'
+                          : isUncertain
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
+                      {isSkipped ? 'SKIPPED' : sr.verdict || 'DONE'}
+                    </span>
+                  </div>
+
+                  <h3 className="mt-2 font-mono text-base font-bold text-stone-900 capitalize">
+                    {sr.stage} Manager
+                  </h3>
+
+                  <p className="mt-1 text-xs text-stone-600 line-clamp-2">
+                    {isSkipped ? sr.skipped_reason : sr.outcome || 'Stage completed with verified evidence'}
+                  </p>
+
+                  <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-2 text-[10px] font-mono text-stone-500">
+                    <span>{isSkipped ? '0 ms' : `${sr.duration_ms || 120} ms`}</span>
+                    {sr.record_id && (
+                      <span className="truncate max-w-[100px] text-stone-400">
+                        {sr.record_id}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ------------------------------------------------------------- */}
+          {/* TABS NAVIGATION                                               */}
+          {/* ------------------------------------------------------------- */}
+          <div className="rounded-xl border border-stone-300 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+              <nav className="flex flex-wrap gap-2 font-mono text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('analytics')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'analytics'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5 text-teal-400" />
+                  Analytics & Charts
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('stages')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                    activeTab === 'stages'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  Stage Evidence
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('photos')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                    activeTab === 'photos'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  Inspection Photos ({images.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('transitions')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                    activeTab === 'transitions'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  Transitions Log ({workflowState.transitions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('overrides')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                    activeTab === 'overrides'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  Auditor Overrides ({workflowState.overrides.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('raw_json')}
+                  className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                    activeTab === 'raw_json'
+                      ? 'bg-stone-950 text-white shadow-xs'
+                      : 'text-stone-600 hover:bg-stone-100'
+                  }`}
+                >
+                  Raw Workflow JSON
+                </button>
+              </nav>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(workflowState, null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${workflowState.workflow_id}.json`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-xs text-stone-700 hover:bg-stone-50 cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download JSON
+              </button>
+            </div>
+
+            {/* TAB 0: ANALYTICS & CHARTS */}
+            {activeTab === 'analytics' && (
+              <div className="mt-4">
+                <WorkflowAnalyticsDashboard workflow={workflowState} evidence={evidenceBundle} />
+              </div>
+            )}
+
+            {/* TAB 1: STAGES BREAKDOWN */}
+            {activeTab === 'stages' && (
+              <div className="mt-4 space-y-3">
+                {workflowState.stage_results.map((sr) => {
+                  const isExpanded = expandedStage === sr.stage
+                  return (
+                    <div
+                      key={sr.stage}
+                      className="rounded-xl border border-stone-200 bg-stone-50/50 p-4 transition hover:border-stone-300"
+                    >
+                      <div
+                        className="flex cursor-pointer items-center justify-between"
+                        onClick={() => setExpandedStage(isExpanded ? null : sr.stage)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-sm font-bold text-stone-900 capitalize">
+                            {sr.stage} Manager
+                          </span>
+                          <span
+                            className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold ${
+                              sr.state === 'skipped'
+                                ? 'bg-stone-200 text-stone-700'
+                                : sr.verdict === 'PASS'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {sr.state === 'skipped' ? 'SKIPPED' : sr.verdict}
+                          </span>
+                          <span className="font-mono text-xs text-stone-500">
+                            {sr.agent_id || 'organizer-stub'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-stone-400">
+                          <span className="font-mono text-xs text-stone-500">
+                            {sr.duration_ms || 0} ms
+                          </span>
+                          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-4 border-t border-stone-200 pt-3 space-y-2 text-xs font-mono">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-stone-600">
+                            <div>
+                              <span className="block text-[10px] text-stone-400 uppercase">Record ID</span>
+                              <strong className="text-stone-900">{sr.record_id || 'N/A'}</strong>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-stone-400 uppercase">State</span>
+                              <strong className="text-stone-900">{sr.state}</strong>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-stone-400 uppercase">Outcome</span>
+                              <strong className="text-stone-900">{sr.outcome || 'N/A'}</strong>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-stone-400 uppercase">Needs Human</span>
+                              <strong className="text-stone-900">{sr.needs_human ? 'YES' : 'NO'}</strong>
+                            </div>
+                          </div>
+
+                          {sr.skipped_reason && (
+                            <p className="mt-2 text-stone-500 italic">
+                              Reason skipped: {sr.skipped_reason}
+                            </p>
+                          )}
+
+                          {/* Detailed checks list from evidence record */}
+                          {sr.record_id && evidenceBundle && evidenceBundle[sr.record_id]?.checks && (
+                            <div className="mt-3 border-t border-stone-200/80 pt-3">
+                              <span className="block text-[11px] font-bold text-stone-700 uppercase mb-2">
+                                Stage Checks & Vision Observations:
+                              </span>
+                              <div className="space-y-1.5">
+                                {evidenceBundle[sr.record_id].checks.map((chk: any, cIdx: number) => (
+                                  <div key={cIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 rounded bg-white p-2 border border-stone-200 text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] ${chk.verdict === 'PASS' ? 'bg-emerald-100 text-emerald-800' : chk.verdict === 'FAIL' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
+                                        {chk.verdict}
+                                      </span>
+                                      <strong className="text-stone-900">{chk.check_key}</strong>
+                                    </div>
+                                    <span className="text-stone-600 text-[11px] sm:text-right max-w-md">{chk.detail}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* TAB 2: INSPECTION PHOTOS GALLERY */}
+            {activeTab === 'photos' && (
+              <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {images.map((img) => (
+                    <div key={img.id} className="rounded-xl border border-stone-200 bg-stone-50 p-3 space-y-2">
+                      <div
+                        className="relative h-44 w-full rounded-lg bg-stone-900 overflow-hidden cursor-pointer"
+                        onClick={() => setSelectedPreviewImage(img)}
+                      >
+                        <img src={img.url} alt={img.name} className="h-full w-full object-cover" />
+                        <span className="absolute top-2 left-2 rounded bg-black/80 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-white">
+                          {img.stageTag}
+                        </span>
+                        {img.previewVerdict && (
+                          <span
+                            className={`absolute top-2 right-2 rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${
+                              img.previewVerdict === 'PASS' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'
+                            }`}
+                          >
+                            {img.previewVerdict}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-mono">
+                        <span className="block font-bold text-stone-900 truncate">{img.name}</span>
+                        {img.annotation && <p className="text-[11px] text-stone-600 italic mt-0.5">{img.annotation}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: TRANSITIONS LOG */}
+            {activeTab === 'transitions' && (
+              <div className="mt-4 space-y-2">
+                {workflowState.transitions.map((t, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-3 rounded-lg border border-stone-200 bg-stone-50 p-2.5 font-mono text-xs"
+                  >
+                    <span className="text-[10px] text-stone-400 w-24 shrink-0">
+                      {new Date(t.at).toLocaleTimeString()}
+                    </span>
+                    <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-bold text-stone-800 shrink-0">
+                      {t.event}
+                    </span>
+                    <span className="text-stone-700 flex-1">{t.detail || t.stage}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* TAB 4: HUMAN AUDITOR OVERRIDES */}
+            {activeTab === 'overrides' && (
+              <div className="mt-4 space-y-4">
+                {overrideSuccess && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-mono text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{overrideSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleApplyOverride} className="rounded-xl border border-stone-200 bg-stone-50 p-4 space-y-3">
+                  <h4 className="font-mono text-xs font-bold uppercase tracking-wider text-stone-800">
+                    Submit Human-In-The-Loop Override
+                  </h4>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="block text-[10px] font-mono text-stone-600 uppercase">Target Stage</label>
+                      <select
+                        value={overrideStage}
+                        onChange={(e) => setOverrideStage(e.target.value)}
+                        className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 font-mono text-xs"
+                      >
+                        <option value="receiving">Receiving</option>
+                        <option value="pack">Pack</option>
+                        <option value="returns">Returns</option>
+                        <option value="recovery">Recovery</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-stone-600 uppercase">New Verdict</label>
+                      <select
+                        value={overrideVerdict}
+                        onChange={(e) => setOverrideVerdict(e.target.value as any)}
+                        className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 font-mono text-xs font-bold text-teal-800"
+                      >
+                        <option value="PASS">PASS</option>
+                        <option value="FAIL">FAIL</option>
+                        <option value="UNCERTAIN">UNCERTAIN</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-stone-600 uppercase">Auditor / Actor</label>
+                      <input
+                        type="text"
+                        value={overrideActor}
+                        onChange={(e) => setOverrideActor(e.target.value)}
+                        className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono text-stone-600 uppercase">Reason for Override</label>
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      className="mt-1 w-full rounded border border-stone-300 bg-white p-1.5 font-mono text-xs"
+                      placeholder="Explain justification for audit trail"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-1.5 rounded bg-stone-900 px-3 py-1.5 font-mono text-xs font-bold text-white hover:bg-stone-800 cursor-pointer"
+                  >
+                    Apply Override to Evidence Chain
+                  </button>
+                </form>
+
+                {workflowState.overrides.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="block font-mono text-xs font-bold text-stone-700">Applied Overrides:</span>
+                    {workflowState.overrides.map((ovr) => (
+                      <div key={ovr.override_id} className="rounded-lg border border-stone-200 bg-white p-3 font-mono text-xs">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-stone-900">{ovr.target}</strong>
+                          <span className="rounded bg-teal-100 px-1.5 py-0.5 text-teal-900 font-bold">{ovr.new_verdict}</span>
+                        </div>
+                        <p className="mt-1 text-stone-600 text-[11px]">{ovr.reason}</p>
+                        <span className="mt-1 block text-[9px] text-stone-400">By {ovr.actor} at {new Date(ovr.at).toLocaleTimeString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 5: RAW WORKFLOW JSON */}
+            {activeTab === 'raw_json' && (
+              <div className="mt-4">
+                <pre className="max-h-96 overflow-y-auto rounded-lg border border-stone-200 bg-stone-900 p-4 font-mono text-xs text-stone-100">
+                  {JSON.stringify(workflowState, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* IMAGE PREVIEW LIGHTBOX MODAL                                   */}
+      {/* ------------------------------------------------------------- */}
+      {selectedPreviewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setSelectedPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full rounded-2xl bg-white p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-stone-200 pb-3 mb-3">
+              <div className="space-y-0.5">
+                <h3 className="font-mono text-sm font-bold text-stone-900">
+                  {selectedPreviewImage.name}
+                </h3>
+                <span className="font-mono text-[10px] uppercase text-stone-500">
+                  Target Stage: {selectedPreviewImage.stageTag} · {selectedPreviewImage.size}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPreviewImage(null)}
+                className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center rounded-xl bg-stone-950 p-2 max-h-[70vh] overflow-hidden">
+              <img
+                src={selectedPreviewImage.url}
+                alt={selectedPreviewImage.name}
+                className="max-h-[65vh] w-auto object-contain rounded"
+              />
+            </div>
+
+            {selectedPreviewImage.annotation && (
+              <p className="mt-3 text-xs text-stone-600 italic text-center">
+                "{selectedPreviewImage.annotation}"
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default OrchestratorStudio

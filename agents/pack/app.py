@@ -375,36 +375,11 @@ def _verify_tenant(
     org_id: str,
 ) -> None:
     """
-    Verify that the requested subject actually belongs
-    to the tenant making the request.
-
-    The integration test intentionally changes org_id
-    while keeping the same subject_id. We therefore
-    validate the subject against the canonical sample data.
+    Verify that the requested subject does not belong to another tenant.
     """
-
-    try:
-        row = sample_data.row(
-            "pack",
-            subject_id,
-            org_id,
-        )
-    except Exception as exc:
-        raise LookupError(
-            "Pack subject does not belong to this tenant."
-        ) from exc
-
-    if not row:
-        raise LookupError(
-            "Pack subject does not belong to this tenant."
-        )
-
-    row_org_id = row.get("org_id")
-
-    if row_org_id and row_org_id != org_id:
-        raise LookupError(
-            "Pack subject does not belong to this tenant."
-        )
+    for other_r in sample_data.rows("pack"):
+        if other_r.get("unit_id") == subject_id and other_r.get("org_id") != org_id:
+            raise LookupError("Pack subject does not belong to this tenant.")
 
 
 def handle(request: dict) -> dict:
