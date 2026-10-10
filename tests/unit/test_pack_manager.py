@@ -120,7 +120,7 @@ def test_ref_relative_to_input_dir_is_resolved(gemini, photo):
     gemini["result"] = model_reply()
     pack.handle(make_request(inputs=[photo]))
     assert len(gemini["calls"]) == 1
-    assert gemini["calls"][0][0][0].endswith(f"{MFN['unit_id']}/pack/1.jpg")
+    assert Path(gemini["calls"][0][0][0]).as_posix().endswith(f"{MFN['unit_id']}/pack/1.jpg")
 
 
 def test_order_lines_come_from_the_order_record(gemini, photo):
@@ -190,3 +190,38 @@ def test_unconfigured_pack_ends_blocked_for_review_not_failed(monkeypatch):
     assert pack_stage["state"] == "completed" and pack_stage["verdict"] == "UNCERTAIN"
     assert wf["status"] != "FAILED"
     assert wf["final_outcome"]["outcome"] != "INCOMPLETE"
+
+def test_honest_model_reporting(gemini, photo):
+    reply = model_reply()
+    reply["calls"] = 2
+    reply["cost_usd"] = 0.001
+    gemini["result"] = reply
+    out = pack.handle(make_request(inputs=[photo]))
+    assert_valid(out)
+    assert out["evidence"]["model"]["calls"] == 2
+    assert out["evidence"]["model"]["cost_usd"] == 0.001
+    assert out["evidence"]["model"]["provider"] == "google"
+
+def test_no_key_output_validates(monkeypatch):
+    monkeypatch.setattr(pack, "is_configured", lambda: False)
+    out = pack.handle(make_request())
+    assert_valid(out)
+    assert out["verdict"] == "UNCERTAIN"
+    assert out["evidence"]["model"]["calls"] == 0
+    assert out["evidence"]["model"]["cost_usd"] == 0
+
+def test_unit_0022_extra_item_fails(gemini, photo):
+    reply = model_reply(no_extra_items="FAIL")
+    gemini["result"] = reply
+    out = pack.handle(make_request(inputs=[photo]))
+    assert_valid(out)
+    assert out["verdict"] == "FAIL"
+    assert out["evidence"]["decision"]["outcome"] == "stop_and_fix"
+
+def test_photo_discovered_by_orchestrator(monkeypatch):
+    from orchestration.orchestrator import discover_inputs
+    monkeypatch.setenv("INPUT_DIR", (ROOT / "data/input").as_posix())
+    for unit in ["UNIT-0008", "UNIT-0016", "UNIT-0019", "UNIT-0022"]:
+        inputs = discover_inputs(unit, "pack")
+        assert any(Path(inp["ref"]).name == "open_box.jpg" for inp in inputs)
+        assert all("sha256" in inp for inp in inputs)
