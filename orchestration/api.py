@@ -20,6 +20,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from agents.returns.core.catalog import (
     get_product,
@@ -45,11 +46,49 @@ from .orchestrator import (
 from .store import EvidenceConflict, FileStore
 
 app = FastAPI(title="CUBE Round 3 orchestrator")
+
+# Configure CORS for local development and deployed frontend origins (e.g. Vercel)
+raw_cors = os.environ.get("CORS_ORIGINS", "")
+cors_origins = [o.strip() for o in raw_cors.split(",") if o.strip()]
+if not cors_origins:
+    cors_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://localhost:8100",
+    ]
+
+# Allow Vercel production and preview deployments (*.vercel.app)
+allow_vercel_previews = os.environ.get("CORS_ALLOW_VERCEL_PREVIEWS", "true").lower() in ("true", "1", "yes")
+cors_regex = r"^https:\/\/.*\.vercel\.app$" if allow_vercel_previews else None
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 FLOW = os.environ.get("ORCH_FLOW") or default_flow_path()
 STORE = FileStore()
 
 
+@app.get("/")
+@app.head("/")
+def root() -> dict:
+    return {
+        "name": "CUBE Round 3 Orchestrator",
+        "status": "online",
+        "pod": "pod-15 (Specialist)",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
+@app.head("/health")
 def health() -> dict:
     agents = {}
     for stage in flow_stages(load_flow(FLOW)):
@@ -83,7 +122,12 @@ def create(body: dict) -> dict:
         raise HTTPException(422, "org_id and unit_id (or subject_id) are required")
     case = {"org_id": org, "unit_id": subject, "route": body.get("route") or sample_data.route(subject, org),
             "returned": body.get("returned", sample_data.has("returns", subject, org))}
-    return run_workflow(case, load_flow(FLOW), STORE)
+    try:
+        return run_workflow(case, load_flow(FLOW), STORE)
+    except EvidenceConflict as exc:
+        raise HTTPException(409, f"Evidence conflict: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(500, f"Workflow execution failed: {exc}") from exc
 
 
 def _get(workflow_id: str) -> dict:
@@ -164,7 +208,7 @@ def return_warehouse_records() -> list[dict]:
                     if p.is_file() and not p.name.startswith("."):
                         available_images.append({
                             "filename": p.name,
-                            "url": f"/api/returns/image/{unit_id}/{p.name}",
+                            "url": f"/returns/image/{unit_id}/{p.name}",
                             "size_bytes": p.stat().st_size,
                         })
 
@@ -205,27 +249,26 @@ def return_samples() -> list[dict]:
             items.append({
                 "filename": p.name,
                 "size_bytes": p.stat().st_size,
-                "url": f"/api/returns/image/UNIT-0014/{p.name}",
+                "url": f"/returns/image/UNIT-0014/{p.name}",
             })
     return items
 
 
-@app.get("/returns/image/{unit_or_file}")
-@app.get("/returns/image/{unit_id}/{filename}")
-def return_image(unit_or_file: str, filename: str | None = None):
-    input_root = Path(os.environ.get("INPUT_DIR", ROOT / "data" / "input")).resolve()
-    if filename is not None:
-        unit_id = unit_or_file
-        file_name = filename
-    else:
-        unit_id = "UNIT-0014"
-        file_name = unit_or_file
+@app.get("/returns/image/{filename}")
+@app.get("/api/returns/image/{filename}")
+def return_image_default(filename: str):
+    return return_image(unit_id="UNIT-0014", filename=filename)
 
-    target = (input_root / unit_id / "returns" / file_name).resolve()
+
+@app.get("/returns/image/{unit_id}/{filename}")
+@app.get("/api/returns/image/{unit_id}/{filename}")
+def return_image(unit_id: str, filename: str):
+    input_root = Path(os.environ.get("INPUT_DIR", ROOT / "data" / "input")).resolve()
+    target = (input_root / unit_id / "returns" / filename).resolve()
     if not target.is_file():
-        target = (input_root / unit_id / "returns_samples_backup" / file_name).resolve()
+        target = (input_root / unit_id / "returns_samples_backup" / filename).resolve()
     if not target.is_file():
-        raise HTTPException(404, f"Image {file_name} for unit {unit_id} not found")
+        raise HTTPException(404, f"Image {filename} for unit {unit_id} not found")
     try:
         target.relative_to(input_root)
     except ValueError:
@@ -372,3 +415,10 @@ async def inspect_return(
                     target = returns_dir / p.name
                     if not target.exists():
                         shutil.copy2(p, target)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8100))
+    host = os.environ.get("HOST", "0.0.0.0")
+    uvicorn.run("orchestration.api:app", host=host, port=port)
