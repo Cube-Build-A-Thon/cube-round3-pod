@@ -120,7 +120,7 @@ def test_ref_relative_to_input_dir_is_resolved(gemini, photo):
     gemini["result"] = model_reply()
     pack.handle(make_request(inputs=[photo]))
     assert len(gemini["calls"]) == 1
-    assert gemini["calls"][0][0][0].endswith(f"{MFN['unit_id']}/pack/1.jpg")
+    assert Path(gemini["calls"][0][0][0]).as_posix().endswith(f"{MFN['unit_id']}/pack/1.jpg")  # same check on Windows
 
 
 def test_order_lines_come_from_the_order_record(gemini, photo):
