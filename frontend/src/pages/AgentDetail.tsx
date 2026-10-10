@@ -94,9 +94,6 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
     )
   }
 
-  if (stage === 'recovery') {
-    return (
-      <article className="mx-auto w-full max-w-7xl space-y-6">
   if (stage === 'pack') {
     return (
       <article className="mx-auto w-full max-w-5xl space-y-6">
@@ -114,9 +111,7 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
           </span>
         </div>
 
-        <ReceivingInspector
-          onNavigateToAgents={() => onNavigate('agents')}
-        />
+        <PackInspector onNavigateToAgents={() => onNavigate('agents')} />
 
         <nav aria-label="Agent stage navigation" className="flex items-center justify-between border-t border-stone-300/80 pt-4">
           {previousAgent ? (
@@ -156,7 +151,6 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
         <RecoveryInspector
           onNavigateToAgents={() => onNavigate('agents')}
         />
-        <PackInspector onNavigateToAgents={() => onNavigate('agents')} />
 
         <nav aria-label="Agent stage navigation" className="flex items-center justify-between border-t border-stone-300/80 pt-4">
           {previousAgent ? (

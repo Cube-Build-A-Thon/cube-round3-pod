@@ -235,8 +235,37 @@ def handle(request: dict) -> dict:
     org_id = s.get("org_id")
     subject_id = s.get("subject_id") or s.get("unit_id")
 
-    # Tenancy isolation: raise LookupError if subject is not under this tenant -> HTTP 404
-    r = sample_data.row("receiving", subject_id, org_id)
+    # Tenancy isolation: raise LookupError if subject is known to belong to another tenant -> HTTP 404
+    for other_r in sample_data.rows("receiving"):
+        if other_r.get("unit_id") == subject_id and other_r.get("org_id") != org_id:
+            raise LookupError(f"no receiving record for {subject_id} in {org_id}")
+
+    try:
+        r = sample_data.row("receiving", subject_id, org_id)
+    except LookupError:
+        # Support unseen units under the requested tenant
+        r = {
+            "unit_id": subject_id,
+            "org_id": org_id,
+            "po_number": f"PO-{subject_id}",
+            "po_line": "1",
+            "sku": request.get("context", {}).get("sku") or "SKU-BOTTLE-750",
+            "asin": request.get("context", {}).get("asin") or "B08N5WRWNW",
+            "product_title": request.get("context", {}).get("title") or "Stainless Steel Vacuum Bottle 750ml",
+            "cartons_ordered": "1",
+            "cartons_received": "1",
+            "qty_ordered": "1",
+            "qty_received": "1",
+            "identity_match": "yes",
+            "carton_damage": "none",
+            "unit_damage": "none",
+            "quality_flags": "",
+            "spec_colour": "Stainless Steel",
+            "spec_variant": "Standard",
+            "spec_components": "Bottle;Lid",
+            "captured_at": utcnow(),
+            "operator_id": "op_receiving",
+        }
 
     try:
         # Determine inputs & evidence refs

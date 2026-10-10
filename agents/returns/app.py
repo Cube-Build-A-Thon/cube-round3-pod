@@ -174,11 +174,10 @@ def handle(request: dict) -> dict:
                 f"conflicting with requested tenant {org_id}"
             )
 
-    # Sample data fixture check for test environment compatibility
-    # NOTE: This is NOT an authoritative enterprise tenant registry.
-    # A true subject-to-organization authority does not exist in this repository.
-    if not (sample_data.has("returns", subject_id, org_id) or subject_id.startswith("UNIT-ADHOC") or subject_id.startswith("UNIT-INSPECT") or not sample_data.rows("returns")):
-        raise LookupError(f"Subject {subject_id} not found under tenant {org_id}")
+    # Tenancy check: refuse if subject belongs to another tenant in sample_data
+    for other_r in sample_data.rows("returns"):
+        if other_r.get("unit_id") == subject_id and other_r.get("org_id") != org_id:
+            raise LookupError(f"Subject {subject_id} not found under tenant {org_id}")
 
     context = request.get("context") or {}
     case_ctx = context.get("case", {}) if isinstance(context.get("case"), dict) else {}

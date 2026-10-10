@@ -54,13 +54,17 @@ if not cors_origins:
     cors_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
         "http://localhost:3000",
         "http://localhost:8100",
+        "http://127.0.0.1:8100",
     ]
 
-# Allow Vercel production and preview deployments (*.vercel.app)
-allow_vercel_previews = os.environ.get("CORS_ALLOW_VERCEL_PREVIEWS", "true").lower() in ("true", "1", "yes")
-cors_regex = r"^https:\/\/.*\.vercel\.app$" if allow_vercel_previews else None
+# Allow any local development origin (Vite/React on any port) and Vercel production/preview deployments
+cors_regex = r"^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]+)?$|^https:\/\/.*\.vercel\.app$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -124,6 +128,83 @@ def create(body: dict) -> dict:
             "returned": body.get("returned", sample_data.has("returns", subject, org))}
     try:
         return run_workflow(case, load_flow(FLOW), STORE)
+    except EvidenceConflict as exc:
+        raise HTTPException(409, f"Evidence conflict: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(500, f"Workflow execution failed: {exc}") from exc
+
+
+@app.post("/workflows/inspect")
+async def inspect_workflow_with_images(
+    file: UploadFile | None = File(None),
+    files: list[UploadFile] = File(None),
+    org_id: str | None = Form(None),
+    unit_id: str | None = Form(None),
+    route: str | None = Form(None),
+    returned: str | None = Form(None),
+    stage_tags: str | None = Form(None),
+) -> dict:
+    """Accept multimodal image captures, route to respective agent input folders, and run full workflow."""
+    input_root = Path(os.environ.get("INPUT_DIR", ROOT / "data" / "input"))
+    target_unit_id = (unit_id or "UNIT-0014").strip()
+    target_org_id = (org_id or "org_demo_alpha").strip()
+    target_route = route.strip() if route and route != "auto" else sample_data.route(target_unit_id, target_org_id)
+
+    if returned is None or str(returned).lower() == "auto":
+        is_returned = sample_data.has("returns", target_unit_id, target_org_id)
+    else:
+        is_returned = str(returned).lower() in ("true", "1", "yes")
+
+    uploaded_files: list[UploadFile] = []
+    if file and file.filename:
+        uploaded_files.append(file)
+    if files:
+        for f in files:
+            if f and f.filename and f not in uploaded_files:
+                uploaded_files.append(f)
+
+    # Parse stage mapping if provided
+    stage_mapping = {}
+    if stage_tags:
+        try:
+            stage_mapping = json.loads(stage_tags)
+        except Exception:
+            pass
+
+    for idx, up_file in enumerate(uploaded_files):
+        fname = up_file.filename or f"upload_{idx}.jpg"
+        ext = Path(fname).suffix.lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".webp", ".heic"]:
+            continue
+
+        lower_name = fname.lower()
+        target_stage = stage_mapping.get(fname)
+        if not target_stage:
+            if any(k in lower_name for k in ("pack", "box")):
+                target_stage = "pack"
+            elif any(k in lower_name for k in ("return", "damage", "chassis", "scratch")):
+                target_stage = "returns"
+            elif any(k in lower_name for k in ("receiving", "carton", "dock", "intake")):
+                target_stage = "receiving"
+            else:
+                target_stage = "returns" if is_returned else "receiving"
+
+        stage_dir = input_root / target_unit_id / target_stage
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = Path(fname).name
+        target_path = stage_dir / safe_name
+        contents = await up_file.read()
+        target_path.write_bytes(contents)
+
+    case = {
+        "org_id": target_org_id,
+        "unit_id": target_unit_id,
+        "route": target_route,
+        "returned": is_returned,
+    }
+    try:
+        wf_res = run_workflow(case, load_flow(FLOW), STORE)
+        return bundle(wf_res, STORE)
     except EvidenceConflict as exc:
         raise HTTPException(409, f"Evidence conflict: {exc}") from exc
     except Exception as exc:

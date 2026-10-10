@@ -103,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'text-stone-600 hover:bg-white/65 hover:text-stone-950'
               }`}
             >
-              Analyze
+              Orchestrator
             </button>
             <button
               type="button"

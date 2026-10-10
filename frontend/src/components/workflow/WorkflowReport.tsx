@@ -21,6 +21,8 @@ import {
   Loader2,
 } from 'lucide-react'
 import { ReturnsReportView } from '@/components/returns/ReturnsReportView'
+import { WorkflowAnalyticsDashboard } from '@/components/workflow/WorkflowAnalyticsDashboard'
+import { BarChart3 } from 'lucide-react'
 
 interface WorkflowReportProps {
   initialWorkflow: WorkflowState
@@ -37,7 +39,7 @@ export const WorkflowReport: React.FC<WorkflowReportProps> = ({
   const [loading, setLoading] = useState<boolean>(false)
   const [refreshing, setRefreshing] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'stages' | 'transitions' | 'overrides' | 'json'>('stages')
+  const [activeTab, setActiveTab] = useState<'analytics' | 'stages' | 'transitions' | 'overrides' | 'json'>('analytics')
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({})
 
   // Human Override form state
@@ -403,6 +405,19 @@ export const WorkflowReport: React.FC<WorkflowReportProps> = ({
           <nav aria-label="Workflow report sections" className="border-b border-stone-300 flex flex-wrap gap-2 font-mono text-xs">
             <button
               type="button"
+              aria-pressed={activeTab === 'analytics'}
+              onClick={() => setActiveTab('analytics')}
+              className={`pb-2 px-3 border-b-2 font-bold cursor-pointer transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-700 ${
+                activeTab === 'analytics'
+                  ? 'border-stone-900 text-stone-900'
+                  : 'border-transparent text-stone-500 hover:text-stone-800'
+              }`}
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-teal-700" />
+              ANALYTICS & CHARTS
+            </button>
+            <button
+              type="button"
               aria-pressed={activeTab === 'stages'}
               onClick={() => setActiveTab('stages')}
               className={`pb-2 px-3 border-b-2 font-bold cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-700 ${
@@ -450,6 +465,13 @@ export const WorkflowReport: React.FC<WorkflowReportProps> = ({
               RAW JSON
             </button>
           </nav>
+
+          {/* TAB 0: ANALYTICS & CHARTS */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-4">
+              <WorkflowAnalyticsDashboard workflow={workflow} evidence={evidenceBundle} />
+            </div>
+          )}
 
           {/* TAB 1: STAGES BREAKDOWN */}
           {activeTab === 'stages' && (
