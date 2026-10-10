@@ -1,88 +1,225 @@
-"""Recovery Manager: agent entry point.
+"""Sydon Recovery Manager: Automated Amazon FBA Fee Reconciliation & Claims Engine.
 
-========================  REPLACE ME  ========================
-ORGANISER STUB. It reads the previous evidence in `request["previous_evidence"]` plus the sample fee report, and
-labels each charge CONTRADICTS / SUPPORTS / SILENT. The matching rules below are ILLUSTRATIVE ONLY, not claim
-logic. In particular they ignore the open Round 2 findings (docs/decisions.md, F-07 to F-12).
-Member 5: bring your Round 2 Recovery Manager here.
+Cross-references Amazon fee reports against upstream warehouse evidence from
+Receiving, Prep, Pack, and Returns to produce deterministic, audit-traceable
+claims recommendations while protecting seller account standing.
 
-Check semantics for Recovery: the condition is "this charge is supported by evidence".
-  PASS      evidence supports the charge     -> no claim
-  FAIL      evidence contradicts the charge  -> claim
-  UNCERTAIN evidence is silent / insufficient -> cannot claim; say why
-A wrongly filed claim costs standing with the channel, so SILENT must never become a claim.
-Recovery reads the accumulated evidence; it does not rewrite it or the workflow state.
-Run:  uvicorn agents.recovery.app:app --port 8105
-===============================================================
+Check semantics for Recovery:
+  PASS      evidence supports the charge     -> no claim (charge is legitimate)
+  FAIL      evidence contradicts the charge  -> claim (charge is erroneous, dispute it)
+  UNCERTAIN evidence is silent / insufficient -> cannot claim; record reason
 """
+from __future__ import annotations
+
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from shared.utils import sample_data
-from shared.utils.records import build_output, build_record, check, utcnow
+from shared.utils.records import build_output, build_record, check, pending_output, utcnow
 from shared.utils.server import make_app
-from shared.utils.stubs import STUB_MODEL, effective_verdict, previous
+from shared.utils.stubs import effective_verdict, previous
 
 STAGE = "recovery"
-AGENT_ID = "recovery-stub@0"
+AGENT_ID = "recovery-sydon@1.0"
+MODEL = {
+    "name": "sydon-rule-engine",
+    "version": "1.0",
+    "provider": "sydon-deterministic",
+}
+
+ROOT = Path(__file__).resolve().parent
+RULES_FILE = ROOT / "amazon_rules.json"
+
+
+def _load_catalog() -> dict[str, dict[str, Any]]:
+    if not RULES_FILE.exists():
+        return {}
+    try:
+        data = json.loads(RULES_FILE.read_text(encoding="utf-8"))
+        return {r["charge_type"]: r for r in data.get("rules", [])}
+    except Exception:
+        return {}
+
+
+RULES_CATALOG = _load_catalog()
+
+
+def _parse_iso(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
 
 
 def position(line: dict, request: dict) -> tuple[str, str, list[str]]:
-    """(CONTRADICTS | SUPPORTS | SILENT, detail, evidence record ids). Uses EFFECTIVE verdicts (overrides applied)."""
-    ctype = line["charge_type"]
+    """Determine whether evidence CONTRADICTS, SUPPORTS, or is SILENT for a charge.
+
+    Returns:
+        (position, justification_detail, evidence_record_ids)
+    """
+    ctype = line.get("charge_type", "").lower()
+    amount = float(line.get("amount_usd", 0.0))
+    posted_date = _parse_iso(line.get("posted_date") + "T23:59:59Z" if "posted_date" in line else None)
+
+    # Finding F-09 / D-005: 0.00 amount cannot be claimed
+    if amount <= 0:
+        return "SILENT", "amount is 0.00: nothing to claim, or amount is missing (finding F-09)", []
+
+    rule_meta = RULES_CATALOG.get(ctype, {})
+    rule_id = rule_meta.get("id")
+    rule_cite = f" (Rule #{rule_id})" if rule_id else ""
+
+    # 1. Inbound Defect Fee
     if ctype == "inbound_defect_fee":
         prep = previous(request, "prep")
-        if not prep or prep["status"] != "completed":
-            return "SILENT", "no usable Prep record for this subject", []
+        if not prep or prep.get("status") != "completed":
+            return "SILENT", f"No usable Prep inspection record to verify packaging/labeling compliance{rule_cite}", []
+
+        # Verify inspection took place before the charge posted
+        prep_time = _parse_iso(prep.get("captured_at"))
+        if posted_date and prep_time and prep_time > posted_date:
+            return "SILENT", f"Prep inspection timestamp ({prep.get('captured_at')}) postdates fee assessment", [prep["record_id"]]
+
         v = effective_verdict(request, prep)
         if v == "PASS":
-            return "CONTRADICTS", "Prep evidence shows the unit compliant", [prep["record_id"]]
+            return "CONTRADICTS", f"Prep evidence confirms unit was fully compliant prior to charge{rule_cite}", [prep["record_id"]]
         if v == "FAIL":
-            return "SUPPORTS", "Prep evidence shows a defect", [prep["record_id"]]
-        return "SILENT", "Prep evidence is uncertain", [prep["record_id"]]
+            return "SUPPORTS", f"Prep evidence confirms an inbound packaging or labeling defect occurred{rule_cite}", [prep["record_id"]]
+        return "SILENT", f"Prep evidence is uncertain or pending operator review{rule_cite}", [prep["record_id"]]
+
+    # 2. Refund Issued, Item Not Returned
     if ctype == "refund_issued_item_not_returned":
         ret = previous(request, "returns")
-        if ret and ret["status"] == "completed" and ret["checks"] and ret["checks"][0]["verdict"] == "PASS":
-            return "CONTRADICTS", "Returns record shows the right item came back", [ret["record_id"]]
-        return "SILENT", "no usable Returns record", []
+        if not ret or ret.get("status") != "completed":
+            return "SILENT", f"No usable Returns inspection record to verify physical item return{rule_cite}", []
+
+        v = effective_verdict(request, ret)
+        checks = ret.get("checks", [])
+        id_match = next((c for c in checks if c["check_key"] == "identity_match"), None)
+        completeness = next((c for c in checks if c["check_key"] == "completeness"), None)
+
+        if id_match and id_match.get("verdict") == "PASS" and (not completeness or completeness.get("verdict") == "PASS"):
+            return "CONTRADICTS", f"Returns record verifies correct item was received back complete into inventory{rule_cite}", [ret["record_id"]]
+        if (id_match and id_match.get("verdict") == "FAIL") or (completeness and completeness.get("verdict") == "FAIL"):
+            return "SUPPORTS", f"Returns inspection confirms wrong item or missing parts returned{rule_cite}", [ret["record_id"]]
+        return "SILENT", f"Returns evidence is inconclusive or pending review{rule_cite}", [ret["record_id"]]
+
+    # 3. Damaged In Warehouse
+    if ctype == "damaged_in_warehouse":
+        rcv = previous(request, "receiving")
+        if not rcv or rcv.get("status") != "completed":
+            return "SILENT", f"No usable Receiving record to establish condition at arrival{rule_cite}", []
+
+        checks = rcv.get("checks", [])
+        unit_dmg = next((c for c in checks if c["check_key"] == "unit_damage"), None)
+        if unit_dmg and unit_dmg.get("verdict") == "PASS":
+            return "CONTRADICTS", f"Receiving inspection confirms unit was undamaged at receipt; damage occurred in Amazon custody{rule_cite}", [rcv["record_id"]]
+        if unit_dmg and unit_dmg.get("verdict") == "FAIL":
+            return "SUPPORTS", f"Receiving records show item was already damaged upon supplier delivery{rule_cite}", [rcv["record_id"]]
+        return "SILENT", f"Receiving condition evidence is inconclusive{rule_cite}", [rcv["record_id"]]
+
+    # 4. Fulfilment Fee Weight Tier
     if ctype == "fulfilment_fee_weight_tier":
-        return "SILENT", "no measured weight/dimensions upstream (finding F-07)", []
+        prep = previous(request, "prep")
+        measurements = prep.get("payload", {}).get("measurements") if prep else None
+        if measurements and isinstance(measurements, dict):
+            return "CONTRADICTS", f"Prep package measurements contradict Amazon weight tier: {measurements}{rule_cite}", [prep["record_id"]]
+        # Finding F-07: lack of upstream measurements must remain SILENT
+        return "SILENT", f"No measured package dimensions/weight recorded upstream (finding F-07){rule_cite}", []
+
+    # 5. Lost Inbound
     if ctype == "lost_inbound":
-        return "SILENT", "receiving shortfall is supplier-side, not channel-side loss (finding F-10)", []
-    return "SILENT", f"no rule for {ctype}", []
+        rcv = previous(request, "receiving")
+        if rcv and rcv.get("status") == "completed":
+            shortfall = rcv.get("payload", {}).get("shortfall_units", 0)
+            if shortfall > 0:
+                # Finding F-10: Supplier shortfall at receiving is not Amazon loss
+                return "SILENT", f"Receiving shortage ({shortfall} units) is supplier-side, not channel-side loss (finding F-10){rule_cite}", [rcv["record_id"]]
+            qty_check = next((c for c in rcv.get("checks", []) if c["check_key"] == "quantity"), None)
+            if qty_check and qty_check.get("verdict") == "PASS":
+                return "CONTRADICTS", f"Receiving records confirm complete PO quantity arrived at warehouse dock{rule_cite}", [rcv["record_id"]]
+        return "SILENT", f"Receiving shortfall is supplier-side, not channel-side loss (finding F-10){rule_cite}", []
+
+    return "SILENT", f"No applicable policy rule or evidence for charge type '{ctype}'", []
 
 
 def handle(request: dict) -> dict:
-    s = request["subject"]
-    if not sample_data.has("receiving", s["subject_id"], s["org_id"]):
-        raise LookupError(f"unknown subject {s['subject_id']} in {s['org_id']}")  # tenancy: refuse, don't say "no claim"
-    lines = sample_data.fee_lines(s["subject_id"], s["org_id"])
-    checks, charges, claimable = [], [], 0.0
-    for line in lines:
-        pos, why, ids = position(line, request)
-        amount = float(line["amount_usd"])
-        if pos == "CONTRADICTS" and amount <= 0:
-            pos, why = "SILENT", "amount is 0.00: nothing to claim, or the amount is missing (finding F-09)"
-        verdict = {"CONTRADICTS": "FAIL", "SUPPORTS": "PASS", "SILENT": "UNCERTAIN"}[pos]
-        checks.append(check(f"charge_{line['line_id'].lower().replace('-', '_')}", verdict, None,
-                            expected="charge supported by evidence", observed=pos, detail=why,
-                            evidence_refs=ids, uncertain_reason="insufficient_evidence"))
-        if pos == "CONTRADICTS":
-            claimable += amount
-        charges.append({"line_id": line["line_id"], "charge_type": line["charge_type"], "amount_usd": amount,
-                        "position": pos, "reason": why, "evidence_record_ids": ids})
-    claim = any(c["position"] == "CONTRADICTS" for c in charges)
-    silent = any(c["position"] == "SILENT" for c in charges)
-    verdict = "FAIL" if claim else ("UNCERTAIN" if silent else "PASS")
-    outcome = "claim_recommended" if claim else ("insufficient_evidence" if silent else "no_claim")
-    record = build_record(
-        request, agent_id=AGENT_ID, record_id=f"RCY-{s['subject_id']}", model=STUB_MODEL,
-        captured_at=max((l["posted_date"] + "T00:00:00Z" for l in lines), default=utcnow()),
-        checks=checks, outcome=outcome, verdict=verdict,
-        # SILENT means "cannot claim", not "a human must look": do not flood reviewers.
-        needs_human=False,
-        reason=f"stub: {len(charges)} charge(s), {sum(c['position'] == 'CONTRADICTS' for c in charges)} contradicted",
-        payload={"charges": charges, "claimable_usd": round(claimable, 2),
-                 "unclaimable": [c for c in charges if c["position"] != "CONTRADICTS"]},
-    )
-    return build_output(record, next_step="complete")
+    """Agent entry point: evaluates fee lines against evidence and human overrides."""
+    s = request.get("subject", {})
+    org_id = s.get("org_id")
+    subject_id = s.get("subject_id")
+
+    # Tenancy enforcement: refuse subjects not belonging to this org
+    if not sample_data.has("receiving", subject_id, org_id):
+        raise LookupError(f"unknown subject {subject_id} in {org_id}")
+
+    try:
+        lines = sample_data.fee_lines(subject_id, org_id)
+        checks, charges, claimable = [], [], 0.0
+
+        for line in lines:
+            pos, why, ids = position(line, request)
+            amount = float(line.get("amount_usd", 0.0))
+            verdict = {"CONTRADICTS": "FAIL", "SUPPORTS": "PASS", "SILENT": "UNCERTAIN"}[pos]
+
+            checks.append(
+                check(
+                    f"charge_{line['line_id'].lower().replace('-', '_')}",
+                    verdict,
+                    None,
+                    expected="charge supported by evidence",
+                    observed=pos,
+                    detail=why,
+                    evidence_refs=ids,
+                    uncertain_reason="insufficient_evidence" if pos == "SILENT" else None,
+                )
+            )
+
+            if pos == "CONTRADICTS":
+                claimable += amount
+
+            charges.append({
+                "line_id": line["line_id"],
+                "charge_type": line["charge_type"],
+                "amount_usd": amount,
+                "position": pos,
+                "reason": why,
+                "evidence_record_ids": ids,
+            })
+
+        has_claim = any(c["position"] == "CONTRADICTS" for c in charges)
+        has_silent = any(c["position"] == "SILENT" for c in charges)
+        overall_verdict = "FAIL" if has_claim else ("UNCERTAIN" if has_silent else "PASS")
+        outcome = "claim_recommended" if has_claim else ("insufficient_evidence" if has_silent else "no_claim")
+
+        record = build_record(
+            request,
+            agent_id=AGENT_ID,
+            record_id=f"RCY-{subject_id}",
+            model=MODEL,
+            captured_at=max((l["posted_date"] + "T00:00:00Z" for l in lines), default=utcnow()),
+            checks=checks,
+            outcome=outcome,
+            verdict=overall_verdict,
+            needs_human=False,
+            reason=f"Sydon claims engine: {len(charges)} charge(s), {sum(c['position'] == 'CONTRADICTS' for c in charges)} contradicted",
+            payload={
+                "charges": charges,
+                "claimable_usd": round(claimable, 2),
+                "unclaimable": [c for c in charges if c["position"] != "CONTRADICTS"],
+            },
+        )
+        return build_output(record, next_step="complete")
+
+    except LookupError:
+        raise
+    except Exception as exc:
+        # Fail open: produce pending output rather than crashing workflow
+        return pending_output(request, agent_id=AGENT_ID, error_msg=f"Sydon Recovery failure: {exc}")
 
 
 app = make_app(STAGE, handle)

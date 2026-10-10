@@ -11,13 +11,14 @@ STATUS (precedence, highest first):
   IN_PROGRESS        some required stages have not run yet
   COMPLETED          every required stage finished and nothing awaits a person
 
-FINAL OUTCOME (precedence, highest first):
+FINAL OUTCOME (precedence, highest first; updated by Pod decision D-007):
+  INCOMPLETE         a required stage did not complete
+  NEEDS_REVIEW       a stage asks for a person (needs_human)
   CLAIM_RECOMMENDED  Recovery's effective verdict is FAIL (a charge is contradicted by evidence)
   EXCEPTION          any stage's effective verdict is FAIL (a real-world problem, no claim)
-  INCOMPLETE         a required stage did not complete
-  NEEDS_REVIEW       a stage asks for a person
   CLEAN              every required stage passed
-UNCERTAIN is never turned into PASS. This is the DEFAULT policy: improve it and document why (docs/decisions.md).
+UNCERTAIN is never turned into PASS. Starter default precedence (CLAIM_RECOMMENDED first) was refined
+by Pod decision D-007 (docs/decisions.md) so human review requests precede claims and align with BLOCKED status.
 """
 from __future__ import annotations
 

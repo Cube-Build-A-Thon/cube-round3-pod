@@ -116,15 +116,116 @@ Every failure is **recorded and never becomes success**: a degraded evidence rec
 
 ---
 
-## Your Pod's architecture  ← **replace this section**
+---
 
-_Delete this note and describe **your** system. At minimum:_
+## Your Pod's Architecture
 
-1. **Diagram** of your actual components and flow, including anything you added.
-2. **What each agent really is**: model, rules, services, dependencies; which are still stubs.
-3. **Your orchestrator**: approach, how workflow state is stored, retries, how evidence is persisted, how overrides work (link the decisions in `docs/decisions.md`).
-4. **Your routing and final-outcome logic**, and how they treat uncertainty and weak evidence.
-5. **Tenancy**: where it is enforced, and how you tested it.
-6. **Failure model**: what you break in the demo and what happens.
-7. **Deployment**: where it runs, how to reach it, how to start it.
-8. **Known limits.**
+### 1. System Overview and Topology
+
+```text
+┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    Frontend Dashboard (:5173)                                  │
+│                 Interactive React/Vite UI · Trace Visualizer · Human Override Queue           │
+└───────────────────────────────────────────────┬───────────────────────────────────────────────┘
+                                                │ REST API / Vite Proxy
+                                                ▼
+┌───────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 FastAPI Orchestrator (:8100)                                  │
+│             owns workflow state · advances stages · enforces tenancy · stores evidence        │
+│          derives status & final outcome via D-007 precedence · manages append-only overrides │
+└───────┬──────────────────────┬──────────────────────┬──────────────────────┬──────────────────┘
+        │                      │                      │                      │
+        ▼                      ▼                      ▼                      ▼
+┌───────────────┐      ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+│   Receiving   │      │  Prep (FBA)   │      │  Pack (MFN)   │      │   Recovery    │
+│    Manager    │      │    Manager    │      │    Manager    │      │    Manager    │
+│ (Starter Stub)│      │ (Starter Stub)│      │ (Starter Stub)│      │ (Starter Stub)│
+└───────────────┘      └───────────────┘      └───────────────┘      └───────────────┘
+                               ▲                      ▲
+                               │                      │
+                               └──────────┬───────────┘
+                                          │
+                               ┌──────────┴────────────────────────────────┐
+                               │       Returns Manager (Real Agent)        │
+                               │   multi-image conflict · damage negations │
+                               │         Google GenAI Multimodal           │
+                               └──────────────────┬────────────────────────┘
+                                                  │
+                 ┌────────────────────────────────┼────────────────────────────────┐
+                 │                                │                                │
+                 ▼                                ▼                                ▼
+       ┌───────────────────┐            ┌───────────────────┐            ┌───────────────────┐
+       │   Vision Agent    │            │  Identity Agent   │            │Completeness Agent │
+       │ multimodal vision │            │  catalog matching │            │conflict resolution│
+       └───────────────────┘            └───────────────────┘            └───────────────────┘
+                 │                                                                 │
+                 ▼                                                                 ▼
+       ┌───────────────────┐                                             ┌───────────────────┐
+       │  Condition Agent  │                                             │ Disposition Agent │
+       │ packaging vs item │                                             │final item action &│
+       │ damage negations  │                                             │review escalation  │
+       └───────────────────┘                                             └───────────────────┘
+```
+
+### 2. Specialist Pod Composition and Agent Status
+
+Our Pod operates as an official **Specialist Pod** (`pod.json`, `orchestration/flow.specialist.json`), comprising four operational agents and one dedicated Specialist seat:
+
+| Role / Agent | Owner | Status | Implementation Details |
+|---|---|---|---|
+| **Receiving Manager** | `@nithesh33758` | **Integrated** | Authoritative team implementation (`agents/receiving/`). Ingests ASN and physical pallet/box evidence, validates barcodes, PO alignment, and physical condition. |
+| **Specialist / Integration Engineer** | `@VrajeshChary` | **Active Role** | Fills the fifth seat (Prep omitted in Specialist flow `specialist-no-prep-v1`). Responsible for cross-agent evidence contracts, orchestration consistency, and multimodal returns intelligence. |
+| **Pack Manager** | `@devikasingh197` | **Integrated** | Authoritative team implementation (`agents/pack/`). Manages merchant-fulfilled / 3PL packaging, box selection, label compliance, and shipping carrier handoff. |
+| **Returns Manager** | `@VrajeshChary` | **Production Multi-Agent** | Complete multi-agent engine (`agents/returns/`):<br>• **VisionAgent:** Multimodal image inspection with real Gemini GenAI analysis and honest uncertainty fallback without filename heuristics.<br>• **IdentityAgent:** Resolves catalog products by SKU/ASIN across 5 semantic dimensions.<br>• **CompletenessAgent:** Resolves multi-image evidence and missing component conflicts.<br>• **ConditionAgent:** Amazon published condition grading; separates box damage from item damage.<br>• **DispositionAgent:** Canonical warehouse routing (`restock`, `refurbish`, `liquidate`, `dispose`, `pending_review`). |
+| **Recovery Manager** | `@nithesh33758` | **Integrated** | Authoritative team implementation (`agents/recovery/`). Cross-references shipping, fee, and defect records against accumulated upstream evidence to calculate audit recoveries. Under Specialist flow, missing Prep evidence for inbound fees is treated as silent (no false claims). |
+
+### 3. Orchestration and State Management
+
+- **State Engine:** `orchestration/orchestrator.py` advances the pipeline through `advance()`, `resume()`, and `apply_override()`.
+- **Workflow State & Evidence Store:** `FileStore` in `orchestration/store.py` stores workflows atomically (`out/workflows/*.json`) and immutable evidence (`out/evidence/*.json`).
+- **Traceability:** Every final outcome points to `contributing_records`, which point to `evidence_refs`, checks, and content-addressed SHA-256 hashes of examined inputs.
+- **Overrides:** Submitted via `apply_override()` (or `POST /workflows/{id}/overrides`). Overrides are append-only entries referencing the superseded record ID, previous verdict, and new verdict. The latest override wins when computing effective state.
+
+### 4. Routing and Final-Outcome Logic (Decision D-007)
+
+Routing is dynamically defined in `orchestration/flow.specialist.json` (`specialist-no-prep-v1`):
+- Receiving evaluates initial parcel arrival.
+- Prep is omitted: FBA units do not generate Prep evidence; Recovery silently skips inbound-defect fee disputes when Prep evidence is absent.
+- MFN units route to Pack when `route == "mfn"`.
+- Returns runs when `returned: true`.
+- Recovery evaluates all upstream evidence to determine claim eligibility.
+
+Under **Decision D-007** ([`docs/decisions.md`](docs/decisions.md)), the Pod refined the final outcome derivation in `orchestration/rollup.py`:
+1. `INCOMPLETE`: Any required stage did not complete (error or pending).
+2. `NEEDS_REVIEW`: Any stage requests human review (`needs_human: True`).
+3. `CLAIM_RECOMMENDED`: Recovery effective verdict is FAIL (contradicted charge; claimable amount calculated).
+4. `EXCEPTION`: Any stage's effective verdict is FAIL without a claim.
+5. `CLEAN`: All applicable stages passed cleanly.
+
+This strictly separates the warehouse operational disposition (`restock`, `refurbish`, `liquidate`, `dispose`, `pending_review`) from the higher-level Pod outcome (`CLEAN`, `CLAIM_RECOMMENDED`, `EXCEPTION`, `NEEDS_REVIEW`, `INCOMPLETE`).
+
+### 5. Tenancy & Security
+
+- Every request and evidence record carries `subject.org_id`.
+- Orchestrator validates tenant alignment in `_validate()` and rejects mismatches with `tenant_mismatch`.
+- Agents reject cross-tenant requests with HTTP 404 / `AgentRejected`. Returns Manager also validates that upstream evidence does not cross tenant boundaries.
+- No secrets or credentials are hardcoded or tracked in git; local credentials use `.env` (git-ignored).
+
+### 6. Failure & Reliability Model
+
+- **Retries:** Transient failures (`AgentTimeout`, `AgentUnavailable`) are automatically retried up to `defaults.retries` (default: 1 retry).
+- **Graceful Degradation:** Terminal failures (exceptions, schema errors, wrong tenant) produce degraded evidence records (`pending_output`) with status `error`.
+- **Integrity Rule:** A workflow with an error or incomplete stage **NEVER** silently reports `COMPLETED` or `CLEAN`.
+- **Resumption:** `resume()` retries only errored or pending stages while preserving completed evidence.
+
+### 7. Deployment & Running
+
+- **Backend API:** Run `python -m uvicorn orchestration.api:app --port 8100`.
+- **Frontend UI:** Run `cd frontend && npm run dev` (available at `http://localhost:5173`, proxied to `:8100`).
+- **Full Test Suite:** Run `python -m pytest -q`.
+
+### 8. Verification and Compliance
+
+- **Specialist Flow:** All active components validated against Handbook pp. 4, 9 (`specialist-no-prep-v1`).
+- **Live Multimodal Inspection:** Interactive image upload at `POST /returns/inspect` directly invokes Gemini multimodal vision and renders authoritative checks in the frontend without business logic drift.
+- **Contract Adherence:** Zero synthetic dispositions (no `reject`); canonical warehouse dispositions preserved across all layers.

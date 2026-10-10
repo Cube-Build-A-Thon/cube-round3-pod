@@ -9,7 +9,7 @@ import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..utils import is_non_product_media
 
@@ -18,77 +18,131 @@ logger = logging.getLogger(__name__)
 
 class VisionEvidence(BaseModel):
     has_image: bool = Field(default=False, description="Whether an image was provided for visual inspection")
-    physical_product_detected: Optional[bool] = Field(default=None, description="Whether a physical product was detected in the return image")
+    image_quality: str = Field(default="good", description="good, blurry, dark, obstructed, tiny, corrupted, unusable")
+    is_product: Optional[bool] = Field(default=True, description="Whether the image shows a recognizable returned product")
+    product_identity: Optional[str] = Field(default=None, description="Observed product name/type")
+    expected_product_match: Optional[bool] = Field(default=None, description="Whether observed matches expected product")
+    observed_product: Optional[str] = Field(default=None, description="Detailed observable product description")
+    observed_components: List[str] = Field(default_factory=list, description="Explicitly visible components")
+    expected_components: List[str] = Field(default_factory=list, description="Authoritative expected components")
+    missing_components: List[str] = Field(default_factory=list, description="Authoritative missing components")
+    condition: Optional[str] = Field(default=None, description="Observed condition: new, used_like_new, used_good, damaged, uncertain")
+    damage_description: Optional[str] = Field(default=None, description="Description of visible damage if any")
+    ambiguity: Optional[str] = Field(default=None, description="Ambiguous elements, conflicts, obscurations")
+    confidence: float = Field(default=0.90, ge=0.0, le=1.0, description="Visual assessment confidence score")
+    recommended_reason_category: Optional[str] = Field(default=None, description="One of the 8 canonical rule categories")
+
+    # Backward compatibility attributes
+    physical_product_detected: Optional[bool] = Field(default=None, description="Whether a physical product was detected")
     detected_product: Optional[str] = Field(default=None, description="Observable product name/description")
     detected_brand: Optional[str] = Field(default=None, description="Brand name visible on packaging/label")
     visible_parts: List[str] = Field(default_factory=list, description="Explicitly visible components")
-    missing_candidates: List[str] = Field(default_factory=list, description="Empty cavities or unreturned parts with affirmative visual evidence")
+    missing_candidates: List[str] = Field(default_factory=list, description="Empty cavities or unreturned parts")
     conflicting_parts: List[str] = Field(default_factory=list, description="Components with conflicting evidence across multiple photos")
     visible_damage: List[str] = Field(default_factory=list, description="Directly observable scratches, dents, fractures, or stains")
     packaging_state: Optional[str] = Field(default=None, description="factory_sealed, opened_unused, signs_of_use, damaged, uncertain")
     uncertainty_notes: Optional[str] = Field(default=None, description="Ambiguous elements, glare, obscurations")
-    confidence: float = Field(default=0.90, ge=0.0, le=1.0, description="Visual assessment confidence score")
     inference_source: Optional[str] = Field(default="offline_uncertainty", description="Provider and model used for inference")
-
     model_used: Optional[str] = Field(default=None, description="Exact multimodal model and provider used")
-    image_analyzed: Optional[str] = Field(default=None, description="Filename or descriptor of image analyzed")
-    images_analyzed: List[str] = Field(default_factory=list, description="List of image filenames or descriptors analyzed")
+    image_analyzed: Optional[str] = Field(default=None, description="Descriptor of image analyzed")
+    images_analyzed: List[str] = Field(default_factory=list, description="List of image descriptors analyzed")
     vision_confidence: Optional[float] = Field(default=None, description="Normalized vision confidence score")
     detected_evidence: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Structured dictionary of detected physical evidence")
     is_gemini_inference: bool = Field(default=False, description="True if response came from Gemini Multimodal Vision")
     is_fallback: bool = Field(default=False, description="True if fallback / offline failure state was used")
 
+    @model_validator(mode="after")
+    def sync_compatibility_fields(self) -> VisionEvidence:
+        if self.observed_components and not self.visible_parts:
+            self.visible_parts = list(self.observed_components)
+        elif self.visible_parts and not self.observed_components:
+            self.observed_components = list(self.visible_parts)
+
+        if self.missing_components and not self.missing_candidates:
+            self.missing_candidates = list(self.missing_components)
+        elif self.missing_candidates and not self.missing_components:
+            self.missing_components = list(self.missing_candidates)
+
+        if self.product_identity and not self.detected_product:
+            self.detected_product = self.product_identity
+        elif self.detected_product and not self.product_identity:
+            self.product_identity = self.detected_product
+
+        if self.observed_product and not self.detected_product:
+            self.detected_product = self.observed_product
+
+        if self.damage_description and not self.visible_damage:
+            self.visible_damage = [self.damage_description]
+        elif self.visible_damage and not self.damage_description:
+            self.damage_description = "; ".join(str(d) for d in self.visible_damage)
+
+        if self.vision_confidence is None:
+            self.vision_confidence = self.confidence
+        return self
+
 
 def _build_vision_prompt(catalog_product: Optional[Any], num_images: int = 1) -> str:
-    """Builds the canonical multimodal prompt for returns inspection."""
-    expected_parts_str = ", ".join(catalog_product.expected_parts) if catalog_product else "Unknown"
-    title_str = catalog_product.title if catalog_product else "General Merchandise"
-    sku_str = catalog_product.sku if catalog_product else "Unknown"
-
-    if num_images > 1:
-        instructions_header = (
-            f"You are an expert Warehouse Vision Evidence Inspector for customer returns.\n"
-            f"Analyze ALL {num_images} provided images of the returned item/parcel in this batch.\n"
-            f"The photos provide multiple views/angles of the return (e.g. shipping box, product packaging, labels, internal contents, product itself).\n"
-            f"Synthesize and combine the visual evidence across all {num_images} photos for identity, completeness, and condition.\n"
-            f"DO NOT fabricate evidence from catalog specifications or scenario inputs."
-        )
+    """Builds the canonical generic multimodal prompt for returns inspection."""
+    if catalog_product:
+        expected_title = catalog_product.title
+        expected_sku = catalog_product.sku
+        expected_parts_list = catalog_product.expected_parts if catalog_product.expected_parts else []
     else:
-        instructions_header = (
-            f"You are an expert Warehouse Vision Evidence Inspector for customer returns.\n"
-            f"Analyze ONLY the provided image of the returned item/parcel.\n"
-            f"DO NOT fabricate evidence from catalog specifications or scenario inputs."
-        )
+        expected_title = "Unknown / General Merchandise"
+        expected_sku = "Unknown"
+        expected_parts_list = []
+
+    expected_parts_str = ", ".join(f'"{p}"' for p in expected_parts_list) if expected_parts_list else ""
+
+    instructions_header = (
+        f"You are an expert Warehouse Vision Evidence Inspector for customer returns.\n"
+        f"Analyze the actual product visible in the supplied image{'s' if num_images > 1 else ''}. "
+        f"Do not assume a particular product category. Do not infer product identity from filenames. "
+        f"Do not assume the item is a lamp. Evaluate whatever product is actually visible."
+    )
 
     return f"""{instructions_header}
 
-Inspection Instructions:
-1. Examine all provided photos and identify the actual physical product pictured across the angles/views.
-   - Describe what is physically visible.
-2. Read any visible brand name or manufacturer markings physically imprinted on the item or packaging.
-3. List in `visible_parts` all components that are clearly visible across any of the images.
-4. List an item in `missing_candidates` ONLY if there is affirmative visual proof of absence across the images (e.g., empty compartments, empty slots).
-   - If one photo shows a component (such as a cable or accessory) visible beside the item, but another photo contains a sticker, tag, or label claiming that component is missing (or vice versa), DO NOT assert that component in `missing_candidates`. Instead, record the component in `conflicting_parts`, and explain the multi-image discrepancy in `uncertainty_notes` (e.g. "Photos 1 and 2 show a cable beside the item, but photo 3 contains a 'USB Cable Missing' label; unable to establish whether the cable was returned").
-5. List observable physical damage in `visible_damage` (scratches, cracks, tears, dents, broken seals) found on any part or angle.
-6. Classify packaging_state strictly from physical cues across all photos: "factory_sealed", "opened_unused", "signs_of_use", "damaged", or "uncertain". If any photo shows opened packaging or broken seals, classify accordingly.
-7. Set confidence score (0.0 to 1.0) reflecting visual certainty across all photos.
+CRITICAL INSPECTION RULES:
+1. Image Quality:
+   - Identify whether the image is clear, blurry, dark, obstructed, tiny, corrupted, or unusable before making product-condition conclusions.
+   - If the image is too blurry, dark, or obstructed to reliably inspect the item, set image_quality to "blurry" or "unusable". Do NOT guess the product condition from an unusable image.
+2. Is Product:
+   - Determine if the image shows a recognizable returned product (is_product=true), vs non-product media (is_product=false) such as a wall, floor, random scenery, unrelated object, screenshot, document, logo, etc.
+3. Product Identity & Expected Product Match:
+   - Describe what is physically visible (observed_product and product_identity).
+   - If an Expected Product is specified below, evaluate if the observed product matches it. If the image clearly shows a different product than expected, set expected_product_match=false.
+4. Completeness:
+   - Compare observed components against authoritative expected components when supplied below. Do not invent or hallucinate expected components if none are specified.
+   - List missing components only if an authoritative expected component is confirmed absent or empty cavity is seen.
+5. Condition & Damage:
+   - Classify condition as "new", "used_like_new", "used_good", "damaged", or "uncertain".
+   - If visibly broken or damaged beyond acceptable resale condition, describe the damage in damage_description.
+6. Multi-image & Ambiguity:
+   {"- Reconcile evidence across all " + str(num_images) + " photos. If photos contradict one another or belong to different products and cannot be resolved reliably, record the discrepancy in ambiguity rather than guessing." if num_images > 1 else "- If product identity or condition cannot be determined with certainty, record details in ambiguity."}
+7. Recommended Reason Category:
+   - Select exactly one of: "correct_product", "wrong_product", "damaged_product", "missing_component", "blurry_image", "unusable_image", "non_product_image", "ambiguous_multi", "api_failure".
 
-Expected Reference for comparison (do NOT invent observations from this reference):
-- Expected Product: {title_str}
-- Expected SKU: {sku_str}
-- Expected Parts: [{expected_parts_str}]
+EXPECTED REFERENCE (from order details):
+- Expected Product Title: {expected_title}
+- Expected SKU: {expected_sku}
+- Authoritative Expected Components: [{expected_parts_str}]
 
-Return ONLY a valid JSON object matching this schema:
+Respond ONLY with a valid JSON object matching this schema:
 {{
-  "detected_product": "description of item seen",
-  "detected_brand": null,
-  "visible_parts": ["visible parts list"],
-  "missing_candidates": [],
-  "conflicting_parts": [],
-  "visible_damage": [],
-  "packaging_state": "opened_unused",
-  "uncertainty_notes": null,
-  "confidence": 0.95
+  "image_quality": "good",
+  "is_product": true,
+  "product_identity": "name of observed product",
+  "expected_product_match": true,
+  "observed_product": "detailed description of visible product",
+  "observed_components": ["visible parts"],
+  "expected_components": [{expected_parts_str}],
+  "missing_components": [],
+  "condition": "new",
+  "damage_description": null,
+  "ambiguity": null,
+  "confidence": 0.95,
+  "recommended_reason_category": "correct_product"
 }}
 """
 
@@ -117,16 +171,16 @@ class VisionConfig:
         if (self.configured_vision_provider == "gemini" or not self.openrouter_key) and self.gemini_key:
             self.provider = "Google GenAI"
             self.api_key = self.gemini_key
-            self.active_model = self.configured_vision_model or os.environ.get("GEMINI_MODEL") or "gemini-3.8-flash"
+            self.active_model = self.configured_vision_model or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
         elif self.openrouter_key:
             self.provider = "OpenRouter"
             self.api_key = self.openrouter_key
-            req_model = self.configured_vision_model or os.environ.get("OPENROUTER_MODEL") or "google/gemini-3.8-flash"
+            req_model = self.configured_vision_model or os.environ.get("OPENROUTER_MODEL") or "google/gemini-3.5-flash"
             self.active_model = req_model
         elif self.gemini_key:
             self.provider = "Google GenAI"
             self.api_key = self.gemini_key
-            self.active_model = self.configured_vision_model or os.environ.get("GEMINI_MODEL") or "gemini-3.8-flash"
+            self.active_model = self.configured_vision_model or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash"
         else:
             self.provider = "offline"
             self.api_key = None
@@ -210,19 +264,6 @@ class VisionAgent:
         image_filename: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Analyzes image bytes using PIL to detect blank, placeholder, or severely blurred images."""
-        fname_lower = (image_filename or "").lower()
-
-        if any(term in fname_lower for term in ["blank", "empty", "black_screen", "white_screen"]):
-            return {
-                "reason": "Image is blank or an empty placeholder.",
-                "confidence": 0.20,
-            }
-        if any(term in fname_lower for term in ["blur", "out_of_focus", "defocused"]):
-            return {
-                "reason": "Image is severely blurred or out of focus; cannot identify product or assess condition.",
-                "confidence": 0.25,
-            }
-
         if not image_bytes:
             return None
 
@@ -289,24 +330,30 @@ class VisionAgent:
         result_dict["image_analyzed"] = image_analyzed_str
         result_dict["vision_confidence"] = float(result_dict.get("confidence", 0.95))
 
-        check_text = f"{result_dict.get('detected_product', '')} {result_dict.get('uncertainty_notes', '')} {' '.join(images_analyzed)}"
-        is_non_prod = is_non_product_media(check_text)
-        result_dict["physical_product_detected"] = not is_non_prod
+        # Check for non-product media ONLY from observed text/descriptions, NEVER from filenames
+        observed_text = f"{result_dict.get('observed_product', '')} {result_dict.get('product_identity', '')} {result_dict.get('detected_product', '')} {result_dict.get('uncertainty_notes', '')} {result_dict.get('ambiguity', '')}"
+        is_non_prod_by_text = is_non_product_media(observed_text)
+        is_prod_val = result_dict.get("is_product")
+        if is_prod_val is not None:
+            is_product_bool = bool(is_prod_val) and not is_non_prod_by_text
+        else:
+            is_product_bool = not is_non_prod_by_text
+        result_dict["is_product"] = is_product_bool
+        result_dict["physical_product_detected"] = is_product_bool
 
-        # Reconcile multi-image discrepancies: if an item is in visible_parts but also in missing_candidates,
-        # or if uncertainty notes state a cross-photo conflict, record as conflicting_parts rather than missing.
-        visible_parts = [p for p in (result_dict.get("visible_parts") or []) if isinstance(p, str)]
-        raw_missing = [p for p in (result_dict.get("missing_candidates") or []) if isinstance(p, str)]
+        # Reconcile components across observed and missing lists
+        observed_components = [p for p in (result_dict.get("observed_components") or result_dict.get("visible_parts") or []) if isinstance(p, str)]
+        raw_missing = [p for p in (result_dict.get("missing_components") or result_dict.get("missing_candidates") or []) if isinstance(p, str)]
         conflicting_parts = [p for p in (result_dict.get("conflicting_parts") or []) if isinstance(p, str)]
 
         clean_missing: List[str] = []
-        visible_lower = [v.lower() for v in visible_parts]
+        observed_lower = [v.lower() for v in observed_components]
         for m in raw_missing:
             m_low = m.lower()
-            is_vis = any(m_low in v or v in m_low for v in visible_lower)
+            is_vis = any(m_low in v or v in m_low for v in observed_lower)
             if not is_vis:
                 tokens = [t for t in m_low.split() if len(t) >= 3 and t not in ("and", "the", "for", "with")]
-                for v in visible_lower:
+                for v in observed_lower:
                     if any(t in v.split() for t in tokens):
                         is_vis = True
                         break
@@ -316,28 +363,65 @@ class VisionAgent:
             else:
                 clean_missing.append(m)
 
-        notes_str = str(result_dict.get("uncertainty_notes") or "")
+        notes_str = str(result_dict.get("ambiguity") or result_dict.get("uncertainty_notes") or "")
         notes_lower = notes_str.lower()
         if "conflict" in notes_lower or ("photo" in notes_lower and "missing" in notes_lower) or ("label" in notes_lower and "missing" in notes_lower):
-            for cand in ["cable", "usb cable", "manual", "power cord", "charger"]:
-                if cand in notes_lower and cand not in conflicting_parts:
-                    conflicting_parts.append(cand)
-                    clean_missing = [cm for cm in clean_missing if cand not in cm.lower() and cm.lower() not in cand]
+            # Dynamically reconcile any candidate parts mentioned in conflict notes without hardcoding
+            for cand in list(clean_missing):
+                if cand.lower() in notes_lower:
+                    if cand not in conflicting_parts:
+                        conflicting_parts.append(cand)
+                    clean_missing.remove(cand)
 
-        result_dict["visible_parts"] = visible_parts
+        result_dict["observed_components"] = observed_components
+        result_dict["visible_parts"] = observed_components
+        result_dict["missing_components"] = clean_missing
         result_dict["missing_candidates"] = clean_missing
         result_dict["conflicting_parts"] = conflicting_parts
 
+        # Align damage fields
+        visible_damage = result_dict.get("visible_damage") or []
+        damage_desc = result_dict.get("damage_description")
+        if damage_desc and isinstance(damage_desc, str) and damage_desc.strip():
+            if not visible_damage:
+                visible_damage = [damage_desc]
+        elif visible_damage and not damage_desc:
+            damage_desc = "; ".join(str(d) for d in visible_damage)
+        result_dict["visible_damage"] = visible_damage
+        result_dict["damage_description"] = damage_desc
+
+        # Align product identity fields
+        prod_id = result_dict.get("product_identity") or result_dict.get("detected_product")
+        observed_prod = result_dict.get("observed_product") or prod_id
+        result_dict["product_identity"] = prod_id
+        result_dict["detected_product"] = prod_id
+        result_dict["observed_product"] = observed_prod
+
+        # Image quality
+        img_qual = result_dict.get("image_quality") or "good"
+        result_dict["image_quality"] = img_qual
+
         result_dict["detected_evidence"] = {
-            "product": result_dict.get("detected_product"),
+            "product": prod_id,
+            "product_identity": prod_id,
+            "observed_product": observed_prod,
             "brand": result_dict.get("detected_brand"),
-            "visible_parts": visible_parts,
+            "image_quality": img_qual,
+            "is_product": is_product_bool,
+            "expected_product_match": result_dict.get("expected_product_match"),
+            "visible_parts": observed_components,
+            "observed_components": observed_components,
             "missing_candidates": clean_missing,
+            "missing_components": clean_missing,
             "conflicting_parts": conflicting_parts,
-            "visible_damage": result_dict.get("visible_damage", []),
+            "visible_damage": visible_damage,
+            "damage_description": damage_desc,
+            "condition": result_dict.get("condition"),
             "packaging_state": result_dict.get("packaging_state"),
             "uncertainty_notes": result_dict.get("uncertainty_notes"),
-            "physical_product_detected": not is_non_prod,
+            "ambiguity": result_dict.get("ambiguity"),
+            "recommended_reason_category": result_dict.get("recommended_reason_category"),
+            "physical_product_detected": is_product_bool,
             "images_examined": len(images_data),
         }
         result_dict["inference_source"] = (
@@ -351,7 +435,7 @@ class VisionAgent:
         total_bytes = sum(len(b) for (b, _, _) in images_data)
         log_block = (
             f"\n============================================================\n"
-            f"  [REAL MULTIMODAL GEMINI VISION INFERENCE VERIFIED]\n"
+            f"  [GENERIC MULTIMODAL VISION INFERENCE COMPLETED]\n"
             f"============================================================\n"
             f"  - model used       : {result_dict['model_used']}\n"
             f"  - images analyzed  : {result_dict['images_analyzed']} ({len(images_data)} image(s), {total_bytes} bytes)\n"
@@ -359,11 +443,9 @@ class VisionAgent:
             f"  - vision confidence: {result_dict['vision_confidence']}\n"
             f"  - detected evidence: {json.dumps(result_dict['detected_evidence'], indent=4)}\n"
             f"  - source           : {result_dict['inference_source']}\n"
-            f"  - fallback status  : DISABLED (genuine live multimodal inference)\n"
             f"============================================================"
         )
         logger.info(log_block)
-        print(log_block, flush=True)
 
         return VisionEvidence(**result_dict)
 
@@ -644,10 +726,9 @@ class VisionAgent:
             contents.append(types.Part.from_bytes(data=img_bytes, mime_type=img_mime))
         contents.append(prompt)
 
-        candidate_models = [self.active_model]
-        for fallback_m in ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash"]:
-            if fallback_m not in candidate_models:
-                candidate_models.append(fallback_m)
+        candidate_models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"]
+        if self.active_model and self.active_model not in candidate_models:
+            candidate_models.insert(0, self.active_model)
 
         last_exc = None
         for model_name in candidate_models:
@@ -675,8 +756,16 @@ class VisionAgent:
                 )
             except Exception as exc:
                 last_exc = exc
-                if "503" in str(exc) or "high demand" in str(exc).lower() or "not_found" in str(exc).lower():
-                    logger.warning(f"VisionAgent: Model {model_name} unavailable ({exc}); trying next candidate model...")
+                exc_lower = str(exc).lower()
+                is_recoverable = any(
+                    term in exc_lower
+                    for term in [
+                        "429", "resource_exhausted", "quota", "rate limit",
+                        "503", "high demand", "not_found", "temporarily", "unavailable"
+                    ]
+                )
+                if is_recoverable:
+                    logger.warning(f"VisionAgent: Model {model_name} unavailable or quota exceeded ({exc}); trying next candidate model...")
                     continue
                 raise exc
 
@@ -712,6 +801,8 @@ class VisionAgent:
         if not has_image:
             return VisionEvidence(
                 has_image=False,
+                image_quality="unusable",
+                is_product=False,
                 physical_product_detected=None,
                 detected_product=None,
                 detected_brand=None,
@@ -725,6 +816,7 @@ class VisionAgent:
                     else "No return images provided or accessible; visual inspection cannot be performed."
                 ),
                 confidence=0.0,
+                recommended_reason_category="unusable_image",
                 inference_source="no_image_provided",
                 model_used="offline_no_image",
                 image_analyzed="none",
@@ -736,96 +828,62 @@ class VisionAgent:
             )
 
         if image_quality_issue:
+            issue_reason = image_quality_issue.get("reason", "Image quality is insufficient to verify product.")
+            is_blurry = "blur" in issue_reason.lower()
+            quality_tag = "blurry" if is_blurry else "unusable"
+            rec_cat = "blurry_image" if is_blurry else "unusable_image"
             return VisionEvidence(
                 has_image=True,
+                image_quality=quality_tag,
+                is_product=True,
                 physical_product_detected=True,
                 detected_product=None,
                 detected_brand=None,
                 visible_parts=[],
                 missing_candidates=[],
                 visible_damage=[],
+                condition="uncertain",
                 packaging_state="uncertain",
-                uncertainty_notes=image_quality_issue.get("reason", "Image quality is insufficient to verify product."),
+                uncertainty_notes=issue_reason,
+                ambiguity=issue_reason,
                 confidence=image_quality_issue.get("confidence", 0.20),
+                recommended_reason_category=rec_cat,
                 inference_source="image_quality_guard",
                 model_used="image_quality_guard",
                 image_analyzed=image_analyzed_str,
                 images_analyzed=filenames,
                 vision_confidence=image_quality_issue.get("confidence", 0.20),
-                detected_evidence={"quality_issue": image_quality_issue.get("reason")},
-                is_gemini_inference=False,
-                is_fallback=True,
-            )
-
-        fnames_combined = " ".join(Path(f).name for f in filenames).lower()
-        unrelated_indicators = [
-            "logo", "hacksmiths", "unrelated", "random", "mismatch", "wrong", "other",
-            "shoe", "sneaker", "dog", "cat", "mug", "shirt"
-        ]
-        is_unrelated = any(ind in fnames_combined for ind in unrelated_indicators)
-        if catalog_product:
-            from ..catalog import CATALOGUE
-            for other_sku in CATALOGUE:
-                if other_sku != catalog_product.sku and other_sku.lower() in fnames_combined:
-                    is_unrelated = True
-                    break
-
-        if is_unrelated:
-            is_logo_graphic = is_non_product_media(fnames_combined)
-            if is_logo_graphic:
-                desc = "Graphic Logo / Non-Product Image"
-                unrelated_notes = f"Visual evidence depicts non-product media ({desc}) conflicting with selected SKU {catalog_product.sku if catalog_product else ''}."
-                damage_note = ["Visual evidence depicts non-product media conflicting with selected catalogue item."]
-            elif any(k in fnames_combined for k in ["shoe", "sneaker"]):
-                desc = "Running Shoes / Sneakers"
-                unrelated_notes = f"Visual evidence depicts mismatched physical merchandise ({desc}) conflicting with selected SKU {catalog_product.sku if catalog_product else ''}."
-                damage_note = ["Visual evidence depicts mismatched physical merchandise conflicting with selected catalogue item."]
-            else:
-                desc = "Mismatched Merchandise / Unrelated Physical Item"
-                unrelated_notes = f"Visual evidence depicts mismatched physical merchandise ({desc}) conflicting with selected SKU {catalog_product.sku if catalog_product else ''}."
-                damage_note = ["Visual evidence depicts mismatched physical merchandise conflicting with selected catalogue item."]
-
-            return VisionEvidence(
-                has_image=True,
-                physical_product_detected=False if is_logo_graphic else True,
-                detected_product=desc,
-                detected_brand="Unrecognized / Third-Party",
-                visible_parts=[],
-                missing_candidates=[],
-                visible_damage=damage_note,
-                packaging_state="uncertain",
-                uncertainty_notes=unrelated_notes,
-                confidence=0.92,
-                inference_source="offline_failure_state:unrelated_detector",
-                model_used="unrelated_detector",
-                image_analyzed=image_analyzed_str,
-                images_analyzed=filenames,
-                vision_confidence=0.92,
-                detected_evidence={"mismatch_description": desc},
+                detected_evidence={"quality_issue": issue_reason, "recommended_reason_category": rec_cat},
                 is_gemini_inference=False,
                 is_fallback=True,
             )
 
         return VisionEvidence(
             has_image=True,
-            physical_product_detected=True,
+            image_quality="uncertain",
+            is_product=None,
+            physical_product_detected=None,
             detected_product=None,
             detected_brand=None,
             visible_parts=[],
             missing_candidates=[],
             visible_damage=[],
+            condition="uncertain",
             packaging_state="uncertain",
             uncertainty_notes="Vision model offline or unable to identify item from visual evidence without API key. Returning uncertainty; manual inspection required.",
+            ambiguity="API unavailable or unparseable visual model response",
             confidence=0.30,
+            recommended_reason_category="api_failure",
             inference_source="offline_failure_state:model_unavailable",
             model_used="offline_failure_state",
             image_analyzed=image_analyzed_str,
             images_analyzed=filenames,
             vision_confidence=0.30,
-            detected_evidence={"note": "offline_uncertainty_state"},
+            detected_evidence={"note": "offline_uncertainty_state", "recommended_reason_category": "api_failure"},
             is_gemini_inference=False,
             is_fallback=True,
         )
+
 
 
 _default_vision_agent: Optional[VisionAgent] = None

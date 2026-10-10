@@ -580,3 +580,165 @@ def test_returns_app_unit0014_run_sets_needs_human_and_blocks_orchestrator(monke
     assert final_outcome["verdict"] == "UNCERTAIN"
     assert final_outcome["needs_human"] is True
     assert final_outcome["provisional"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test Suite 5: Decision D-007 Exhaustive Test Matrix
+# ---------------------------------------------------------------------------
+def test_build_record_needs_human_inference_and_preservation():
+    """Verify build_record() infers needs_human when omitted and strictly preserves explicit booleans."""
+    req = {
+        "workflow_id": "WF-test",
+        "stage": "prep",
+        "request_id": "REQ:test",
+        "subject": {"org_id": "org_test", "subject_id": "UNIT-TEST"},
+    }
+    dummy_model = {"name": "test", "version": "1.0"}
+
+    # 1. PASS + pending_review + omitted needs_human -> True
+    r1 = build_record(
+        req, agent_id="a@1", record_id="PRP-001", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="pending_review", verdict="PASS", reason="r", model=dummy_model,
+        needs_human=None,
+    )
+    assert r1["decision"]["needs_human"] is True
+
+    # 2. PASS + UNCERTAIN check + omitted needs_human -> True
+    c_uncertain = check("label", "UNCERTAIN", 0.5, uncertain_reason="poor_image")
+    r2 = build_record(
+        req, agent_id="a@1", record_id="PRP-002", captured_at="2026-01-01T00:00:00Z",
+        checks=[c_uncertain], outcome="compliant", verdict="PASS", reason="r", model=dummy_model,
+        needs_human=None,
+    )
+    assert r2["decision"]["needs_human"] is True
+
+    # 3. PASS + explicit needs_human=True -> True
+    r3 = build_record(
+        req, agent_id="a@1", record_id="PRP-003", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="compliant", verdict="PASS", reason="r", model=dummy_model,
+        needs_human=True,
+    )
+    assert r3["decision"]["needs_human"] is True
+
+    # 4. PASS + explicit needs_human=False -> False
+    r4 = build_record(
+        req, agent_id="a@1", record_id="PRP-004", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="compliant", verdict="PASS", reason="r", model=dummy_model,
+        needs_human=False,
+    )
+    assert r4["decision"]["needs_human"] is False
+
+    # 5. UNCERTAIN + explicit needs_human=False -> False (preserves explicit False even on UNCERTAIN)
+    r5 = build_record(
+        req, agent_id="a@1", record_id="PRP-005", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="pending_review", verdict="UNCERTAIN", reason="r", model=dummy_model,
+        needs_human=False,
+    )
+    assert r5["decision"]["needs_human"] is False
+
+    # 6. UNCERTAIN + omitted needs_human -> True
+    r6 = build_record(
+        req, agent_id="a@1", record_id="PRP-006", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="pending_review", verdict="UNCERTAIN", reason="r", model=dummy_model,
+        needs_human=None,
+    )
+    assert r6["decision"]["needs_human"] is True
+
+
+def test_derive_final_outcome_d007_precedence_matrix():
+    """Verify D-007 precedence: INCOMPLETE > NEEDS_REVIEW > CLAIM_RECOMMENDED > EXCEPTION > CLEAN."""
+    req = lambda stage: {
+        "workflow_id": "WF-d007", "stage": stage, "request_id": f"REQ:{stage}",
+        "subject": {"org_id": "org_test", "subject_id": "UNIT-TEST"},
+    }
+    dummy_model = {"name": "test", "version": "1.0"}
+
+    # Base records
+    rec_pass = build_record(
+        req("receiving"), agent_id="rcv@1", record_id="RCV-01", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="accept", verdict="PASS", reason="ok", model=dummy_model, needs_human=False,
+    )
+    rec_fail = build_record(
+        req("prep"), agent_id="prp@1", record_id="PRP-01", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="non_compliant", verdict="FAIL", reason="defect", model=dummy_model, needs_human=False,
+    )
+    rec_review = build_record(
+        req("returns"), agent_id="rtn@1", record_id="RTN-01", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="pending_review", verdict="UNCERTAIN", reason="review", model=dummy_model, needs_human=True,
+    )
+    rec_claim = build_record(
+        req("recovery"), agent_id="rcy@1", record_id="RCY-01", captured_at="2026-01-01T00:00:00Z",
+        checks=[], outcome="claim_recommended", verdict="FAIL", reason="claim", model=dummy_model, needs_human=False,
+        payload={"claimable_usd": 15.0},
+    )
+
+    ev_store = {
+        "RCV-01": rec_pass,
+        "PRP-01": rec_fail,
+        "RTN-01": rec_review,
+        "RCY-01": rec_claim,
+    }
+
+    # Case 1: EXCEPTION + human review -> NEEDS_REVIEW
+    wf_ex_review = {
+        "workflow_id": "WF-d007",
+        "stage_results": [
+            {"stage": "receiving", "state": "completed", "runs": 1, "record_id": "RCV-01"},
+            {"stage": "prep", "state": "completed", "runs": 1, "record_id": "PRP-01"},
+            {"stage": "returns", "state": "completed", "runs": 1, "record_id": "RTN-01"},
+        ],
+        "overrides": [],
+    }
+    st1, _ = derive_status(wf_ex_review, ev_store)
+    out1 = derive_final_outcome(wf_ex_review, ev_store, st1)
+    assert st1 == "BLOCKED"
+    assert out1["outcome"] == "NEEDS_REVIEW"
+    assert out1["verdict"] == "UNCERTAIN"
+
+    # Case 2: INCOMPLETE + human review -> INCOMPLETE
+    wf_inc_review = {
+        "workflow_id": "WF-d007",
+        "stage_results": [
+            {"stage": "receiving", "state": "completed", "runs": 1, "record_id": "RCV-01"},
+            {"stage": "prep", "state": "error", "runs": 1, "record_id": None},
+            {"stage": "returns", "state": "completed", "runs": 1, "record_id": "RTN-01"},
+        ],
+        "overrides": [],
+    }
+    st2, _ = derive_status(wf_inc_review, ev_store)
+    out2 = derive_final_outcome(wf_inc_review, ev_store, st2)
+    assert st2 == "FAILED"
+    assert out2["outcome"] == "INCOMPLETE"
+    assert out2["verdict"] == "UNCERTAIN"
+
+    # Case 3: INCOMPLETE + recovery claim -> INCOMPLETE
+    wf_inc_claim = {
+        "workflow_id": "WF-d007",
+        "stage_results": [
+            {"stage": "receiving", "state": "completed", "runs": 1, "record_id": "RCV-01"},
+            {"stage": "prep", "state": "error", "runs": 1, "record_id": None},
+            {"stage": "recovery", "state": "completed", "runs": 1, "record_id": "RCY-01"},
+        ],
+        "overrides": [],
+    }
+    st3, _ = derive_status(wf_inc_claim, ev_store)
+    out3 = derive_final_outcome(wf_inc_claim, ev_store, st3)
+    assert st3 == "FAILED"
+    assert out3["outcome"] == "INCOMPLETE"
+    assert out3["verdict"] == "UNCERTAIN"
+
+    # Case 4: INCOMPLETE + recovery claim + human review -> INCOMPLETE
+    wf_inc_claim_rev = {
+        "workflow_id": "WF-d007",
+        "stage_results": [
+            {"stage": "receiving", "state": "pending", "runs": 0, "record_id": None},
+            {"stage": "returns", "state": "completed", "runs": 1, "record_id": "RTN-01"},
+            {"stage": "recovery", "state": "completed", "runs": 1, "record_id": "RCY-01"},
+        ],
+        "overrides": [],
+    }
+    st4, _ = derive_status(wf_inc_claim_rev, ev_store)
+    out4 = derive_final_outcome(wf_inc_claim_rev, ev_store, st4)
+    assert st4 == "BLOCKED"  # returns asks for person, so blocked
+    assert out4["outcome"] == "INCOMPLETE"  # incomplete takes precedence over review and claim
+    assert out4["verdict"] == "UNCERTAIN"
