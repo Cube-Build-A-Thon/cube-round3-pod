@@ -1,7 +1,15 @@
-# Build log
+# Build Log
 
-Keep this current. Organisers read it, and it is evidence of how the Pod actually worked. One entry per working session; newest first. Be honest about what failed.
+## Milestone 1: Adapter Initialization
+- Replaced the local stubs for Receiving, Prep, Pack, Returns, and Recovery with `requests` based HTTP adapters.
+- Integrated base64 image parsing (`load_image_base64_uri` and `load_image_bytes`) directly in the adapters to send payloads to the ML backends.
 
-| Date (UTC) | Who | What we did | What we learned / what broke | Next |
-|---|---|---|---|---|
-| _YYYY-MM-DD_ | _@handle_ | _e.g. Wired Receiving agent into agents/receiving/app.py; contract test passes_ | _e.g. our model returns confidence as a percentage; converted to 0..1_ | _e.g. Prep adapter_ |
+## Milestone 2: Orchestrator Alignment
+- Encountered schema validation failures due to `check_key` formatting.
+- Updated adapters to sanitize checks.
+- Handled tenant restrictions (Receiving Manager's strict `dev_tenant` check).
+- Mapped external API outputs (e.g. `confidence: 92`) to orchestrator requirements (`confidence: 0.92`).
+
+## Milestone 3: Demo Preparation
+- Added `ui.py` to parse the `out/` folder visually, satisfying the UX/Demo requirements.
+- Completed `.env.example` configurations.

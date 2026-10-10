@@ -1,0 +1,26 @@
+# Render Blueprint specification for CUBE Prep Manager Backend
+services:
+  - type: web
+    name: cube-prep-manager-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: production
+      - key: PORT
+        value: 8000
+      - key: CORS_ORIGINS
+        value: '["*"]'
+      - key: STORAGE_BACKEND
+        value: local
+      - key: DATABASE_BACKEND
+        value: local
+      - key: DEFAULT_ORG_ID
+        value: org_demo_alpha
+      - key: GEMINI_MODEL
+        value: gemini-3.6-flash
+      - key: GEMINI_API_KEY
+        sync: false

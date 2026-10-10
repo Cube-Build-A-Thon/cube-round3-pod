@@ -1,10 +1,10 @@
 {
   "stage": "prep",
-  "agent_id": "prep-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "prep-manager",
+  "owner": "@dhanvind360",
   "mode": "inproc",
-  "url": "http://localhost:8102",
+  "url": "https://cube26-prp-0211-dhanvind360.onrender.com",
   "module": "agents.prep.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "Gemini 3.6 Flash multimodal Amazon FBA Prep Manager agent",
+  "notes": "Multimodal Amazon FBA packaging compliance inspection with calibrated evidence-driven checks"
 }
