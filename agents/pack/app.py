@@ -68,7 +68,7 @@ def _uncertain_output(
         outcome="pending_review",
         verdict="UNCERTAIN",
         needs_human=True,
-        model={"name": "none", "version": "0", "calls": 0},
+        model={"name": "none", "version": "0", "calls": 0, "cost_usd": 0},
         inputs=inputs or [],
         reason=f"{code}: {message}",
     )
@@ -659,10 +659,12 @@ def handle(request: dict) -> dict:
         ),
         model={
             "name": "gemini",
+            "provider": "google",
             "version": str(
                 model_version
             ),
-            "calls": 1,
+            "calls": model_result.get("calls", 1),
+            "cost_usd": model_result.get("cost_usd"),
         },
         inputs=request_inputs,
         latency_ms=latency_ms,
