@@ -14,6 +14,7 @@ import type { WorkflowState } from '@/types/workflow'
 import { ReturnsInspector } from '@/components/returns/ReturnsInspector'
 import { RecoveryInspector } from '@/components/recovery/RecoveryInspector'
 import { ReceivingInspector } from '@/components/receiving/ReceivingInspector'
+import { PackInspector } from '@/components/pack/PackInspector'
 
 interface AgentDetailProps {
   stage: AgentStage
@@ -57,6 +58,9 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
   if (stage === 'receiving') {
     return (
       <article className="mx-auto w-full max-w-7xl space-y-6">
+  if (stage === 'pack') {
+    return (
+      <article className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
@@ -113,6 +117,7 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
         <RecoveryInspector
           onNavigateToAgents={() => onNavigate('agents')}
         />
+        <PackInspector onNavigateToAgents={() => onNavigate('agents')} />
 
         <nav aria-label="Agent stage navigation" className="flex items-center justify-between border-t border-stone-300/80 pt-4">
           {previousAgent ? (

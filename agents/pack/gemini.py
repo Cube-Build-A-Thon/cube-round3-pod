@@ -81,6 +81,10 @@ def list_available_models():
             print(m.name)
 
 
+# Price per 1 million tokens. Source: Google AI Pricing page (https://ai.google.dev/pricing), 2026-10-10
+GEMINI_COST_PER_1M_PROMPT = 0.075
+GEMINI_COST_PER_1M_OUTPUT = 0.30
+
 # --------------------------------------------------
 # Gemini call with retry + fallback
 # --------------------------------------------------
@@ -93,10 +97,12 @@ def call_gemini(client, contents, retries=2):
     models_to_try = [MODEL_NAME] + FALLBACK_MODELS
     last_error = None
     deadline = time.time() + TOTAL_BUDGET_SECONDS
+    attempts_made = 0
 
     for model in models_to_try:
 
         for attempt in range(retries):
+            attempts_made += 1
 
             if time.time() >= deadline:
                 raise GeminiUnavailableError(
@@ -110,7 +116,7 @@ def call_gemini(client, contents, retries=2):
                     f"(attempt {attempt + 1}/{retries})"
                 )
 
-                return client.models.generate_content(
+                response = client.models.generate_content(
                     model=model,
                     contents=contents,
                     config=types.GenerateContentConfig(
@@ -118,6 +124,7 @@ def call_gemini(client, contents, retries=2):
                         temperature=0,
                     ),
                 )
+                return response, attempts_made
 
             except (
                 errors.ServerError,        # 5xx, e.g. 503 high demand
@@ -250,7 +257,7 @@ Return ONLY valid JSON in this format:
 """
 
     # ONE Gemini call containing every image plus the prompt
-    response = call_gemini(client, images + [prompt])
+    response, calls = call_gemini(client, images + [prompt])
 
     elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -269,5 +276,17 @@ Return ONLY valid JSON in this format:
 
     result["model_version"] = getattr(response, "model_version", MODEL_NAME)
     result["latency_ms"] = elapsed_ms
+    result["calls"] = calls
 
-    return result
+    cost_usd = None
+    if getattr(response, "usage_metadata", None):
+        try:
+            prompt_tokens = response.usage_metadata.prompt_token_count or 0
+            output_tokens = response.usage_metadata.candidates_token_count or 0
+            cost_usd = (prompt_tokens * GEMINI_COST_PER_1M_PROMPT / 1_000_000) + \
+                       (output_tokens * GEMINI_COST_PER_1M_OUTPUT / 1_000_000)
+        except Exception:
+            pass
+    result["cost_usd"] = cost_usd
+
+    return result
