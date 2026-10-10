@@ -27,6 +27,7 @@ def offline(monkeypatch):
     """No model keys: the agents must fail open (UNCERTAIN), never call a paid API from a test."""
     for k in ("OPENROUTER_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr("agents.pack.gemini.client", None, raising=False)
 
 
 def run(unit, org="org_demo_alpha", store=None, **clients):
