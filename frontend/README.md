@@ -126,5 +126,7 @@ The orchestrator API (`POST /workflows`) currently operates on registered unit i
 **Current Backend Scope:**
 - **No HTTP Image Uploads:** The backend does not currently accept multipart photo/image uploads or arbitrary external stage captures via HTTP.
 - **Unit Lookup:** When a `unit_id` is submitted, each agent inspects the unit's corresponding captures or synthetic rows.
+- **HTTP Image Uploads:** The backend supports multipart image uploads for ad-hoc stage capture analysis via the `POST /returns/inspect` endpoint.
+- **Unit Lookup:** When a `unit_id` is submitted via `POST /workflows`, each agent inspects the unit's corresponding captures or synthetic rows.
 - **Route & Return Parameters:** Fulfillment route (`fba` / `mfn`) and return status (`true` / `false`) can be explicitly passed in the request body or automatically resolved from Pod sample data.
 - **Synchronous Execution:** Workflows run synchronously on submission; loading states in the frontend accurately reflect this synchronous execution.

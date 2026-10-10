@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from pathlib import Path
 
@@ -25,17 +26,77 @@ AGENT_ID = "pack-manager@1"
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
+CHECK_KEYS = ("items_present", "quantities_correct", "no_extra_items")
+
+
+def _uncertain_output(
+    request: dict,
+    *,
+    code: str,
+    message: str,
+    uncertain_reason: str,
+    inputs: list | None = None,
+) -> dict:
+    """A *completed* record: Pack could not judge, so every check is UNCERTAIN and a person must look.
+
+    Unlike pending_output() (status pending/error -> the orchestrator marks the stage errored and the
+    workflow FAILED/INCOMPLETE), this lets the workflow finish BLOCKED/NEEDS_REVIEW. Nothing is hidden:
+    the reason is in the record, and no PASS is ever invented.
+    """
+    safe_id = _safe_request_id(
+        str(request.get("request_id") or request.get("workflow_id", "workflow"))
+    )
+    checks = [
+        check(
+            key,
+            "UNCERTAIN",
+            0.0,
+            detail=f"{code}: {message}",
+            uncertain_reason=uncertain_reason,
+        )
+        for key in CHECK_KEYS
+    ]
+    subject = request.get("subject", {})
+    record = build_record(
+        request,
+        agent_id=AGENT_ID,
+        record_id=f"PCK-{safe_id}",
+        captured_at=utcnow(),
+        unit_scope="order",
+        refs={"order_id": subject.get("subject_id")},
+        checks=checks,
+        outcome="pending_review",
+        verdict="UNCERTAIN",
+        needs_human=True,
+        model={"name": "none", "version": "0", "calls": 0, "cost_usd": 0},
+        inputs=inputs or [],
+        reason=f"{code}: {message}",
+    )
+    return build_output(
+        record,
+        next_step="review",
+        reason=f"{message} Manual packing inspection required.",
+    )
+
+
 def _safe_request_id(request_id: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "-", request_id)
 
 
+def _input_root() -> Path:
+    """Captures live under INPUT_DIR (default data/input); the orchestrator's refs are relative to it."""
+    return Path(os.environ.get("INPUT_DIR", ROOT_DIR / "data" / "input")).resolve()
+
+
+
 def _resolve_input_path(ref: str) -> Path:
-    path = (ROOT_DIR / ref).resolve()
+    root = _input_root()
+    path = (root / ref).resolve()
 
     try:
-        path.relative_to(ROOT_DIR)
+        path.relative_to(root)
     except ValueError:
-        raise ValueError("Input path is outside the repository.")
+        raise ValueError("Input path is outside the input directory.")
 
     if not path.exists():
         raise FileNotFoundError(f"Input file not found: {ref}")
@@ -57,24 +118,50 @@ def _verify_input_hash(
             f"Input hash mismatch for {path.name}."
         )
 
+def _parse_order_lines(raw: str) -> list[dict]:
+    """'SKU-A:1;SKU-B:2' -> [{'sku': 'SKU-A', 'quantity': 1}, ...]"""
+    items = []
+    for part in str(raw or "").split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        sku, _, qty = part.partition(":")
+        try:
+            quantity = int(qty) if qty.strip() else 1
+        except ValueError:
+            quantity = 1
+        items.append({"sku": sku.strip(), "quantity": quantity})
+    return items
 
 def _get_order_lines(request: dict) -> list:
-    context = request.get("context", {})
-    case = context.get("case", {})
+    context = request.get("context") or {}
+    case = context.get("case") or {}
 
     order_lines = case.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
 
-    subject = request.get("subject", {})
+    subject = request.get("subject") or {}
     order_lines = subject.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
+
+
+    for item in request.get("inputs") or []:
+        if isinstance(item, dict):
+            payload = item.get("payload") or item
+            if isinstance(payload, dict) and payload.get("order_lines"):
+                return payload["order_lines"]
+
+    # Fall back to the order record for this unit (tenant-scoped lookup).
+    try:
+        row = sample_data.row("pack", subject.get("subject_id"), subject.get("org_id"))
+    except LookupError:
+        return []
+
+    return _parse_order_lines(row.get("order_lines"))
 
     return []
-
 
 def _format_expected_items(order_lines: list) -> str:
     if not order_lines:
@@ -133,6 +220,12 @@ def _normalise_verdict(value: str | None) -> str:
     return "UNCERTAIN"
 
 
+_UNCERTAIN_REASONS = {
+    "poor_image", "occluded", "insufficient_evidence", "model_error",
+    "rule_unavailable", "conflicting_evidence", "other",
+}
+
+
 def _normalise_check(
     raw_check: dict,
     check_key: str,
@@ -169,8 +262,10 @@ def _normalise_check(
         observed=raw_check.get("observed"),
         detail=detail,
         evidence_refs=evidence_refs,
-        uncertain_reason=raw_check.get(
-            "uncertain_reason"
+        uncertain_reason=(
+            raw_check.get("uncertain_reason")
+            if raw_check.get("uncertain_reason") in _UNCERTAIN_REASONS
+            else "other"
         ),
     )
 
@@ -244,7 +339,7 @@ def _extract_model_checks(
                     "Gemini did not return the required "
                     f"'{final_key}' check."
                 ),
-                "uncertain_reason": "missing_model_check",
+                "uncertain_reason": "model_error",
             }
 
         checks.append(
@@ -365,12 +460,11 @@ def handle(request: dict) -> dict:
     # GEMINI CONFIGURATION
     # ---------------------------------------------------------
     if not is_configured():
-        return pending_output(
+        return _uncertain_output(
             request,
             code="gemini_not_configured",
             message="GEMINI_API_KEY is not configured.",
-            retryable=True,
-            agent_id=AGENT_ID,
+            uncertain_reason="model_error",
         )
 
     # ---------------------------------------------------------
@@ -382,15 +476,14 @@ def handle(request: dict) -> dict:
     )
 
     if not request_inputs:
-        return pending_output(
+        return _uncertain_output(
             request,
             code="no_inputs",
             message=(
                 "No Pack inspection "
                 "images were supplied."
             ),
-            retryable=False,
-            agent_id=AGENT_ID,
+            uncertain_reason="insufficient_evidence",
         )
 
     image_paths = []
@@ -417,24 +510,22 @@ def handle(request: dict) -> dict:
         FileNotFoundError,
         ValueError,
     ) as exc:
-        return pending_output(
+        return _uncertain_output(
             request,
             code="invalid_input",
             message=str(exc),
-            retryable=False,
-            agent_id=AGENT_ID,
+            uncertain_reason="insufficient_evidence",
         )
 
     if not image_paths:
-        return pending_output(
+        return _uncertain_output(
             request,
             code="no_valid_images",
             message=(
                 "No valid Pack inspection "
                 "images were found."
             ),
-            retryable=False,
-            agent_id=AGENT_ID,
+            uncertain_reason="insufficient_evidence",
         )
 
     # ---------------------------------------------------------
@@ -568,10 +659,12 @@ def handle(request: dict) -> dict:
         ),
         model={
             "name": "gemini",
+            "provider": "google",
             "version": str(
                 model_version
             ),
-            "calls": 1,
+            "calls": model_result.get("calls", 1),
+            "cost_usd": model_result.get("cost_usd"),
         },
         inputs=request_inputs,
         latency_ms=latency_ms,

@@ -265,4 +265,41 @@ export const api = {
       throw new ApiError(0, `Failed to load sample return images`, err.message)
     }
   },
+
+  async inspectPackImage(
+    params: {
+      file?: File | null
+      files?: File[]
+      unit_id?: string
+      sku?: string
+      org_id?: string
+    },
+    signal?: AbortSignal
+  ): Promise<EvidenceBundle> {
+    try {
+      const formData = new FormData()
+      if (params.file) {
+        formData.append('file', params.file)
+      }
+      if (params.files && params.files.length > 0) {
+        params.files.forEach((f) => formData.append('files', f))
+      }
+      if (params.sku) formData.append('sku', params.sku)
+      if (params.unit_id) formData.append('unit_id', params.unit_id)
+      if (params.org_id) formData.append('org_id', params.org_id)
+
+      const res = await fetch(`${API_BASE_URL}/pack/inspect`, {
+        method: 'POST',
+        body: formData,
+        signal,
+      })
+      return await handleResponse<EvidenceBundle>(res)
+    } catch (err: any) {
+      if (err instanceof ApiError) throw err
+      if (err.name === 'AbortError') {
+        throw new ApiError(408, 'Analysis timed out. Please try again.', 'timeout')
+      }
+      throw new ApiError(0, 'Unable to connect to Pack Manager.', err.message)
+    }
+  },
 }

@@ -1,13 +1,11 @@
-# Fill in after your Pod completes pod.json. Each member owns their agent folder.
-# Shared areas belong to the whole Pod: list every member (or a team) so any of you can review them.
+# Each member owns their agent folder. Shared areas belong to the whole Pod (any member can review).
+# Specialist Pod: there is no Prep Manager; agents/prep/ is the unused organiser stub.
 # GitHub shows these owners as suggested reviewers. Enforcement needs branch protection (see GITHUB-GUIDE.md).
-/agents/receiving/    @receiving-owner-handle
-/agents/prep/         @prep-owner-handle
-/agents/pack/         @pack-owner-handle
-/agents/returns/      @returns-owner-handle
-/agents/recovery/     @nithesh33758
+/agents/receiving/    @GURUTEJGANAPURAPU
+/agents/pack/         @devikasingh098
 /agents/returns/      @VrajeshChary
-/agents/recovery/     @recovery-owner-handle
-/orchestration/       @member1 @member2 @member3 @member4 @member5
-/shared/              @member1 @member2 @member3 @member4 @member5
-/tests/               @member1 @member2 @member3 @member4 @member5
+/agents/recovery/     @Nithesh33758
+/orchestration/       @kl2400033283 @VrajeshChary @devikasingh098 @GURUTEJGANAPURAPU @Nithesh33758
+/shared/              @kl2400033283 @VrajeshChary @devikasingh098 @GURUTEJGANAPURAPU @Nithesh33758
+/tests/               @kl2400033283 @VrajeshChary @devikasingh098 @GURUTEJGANAPURAPU @Nithesh33758
+/docs/                @kl2400033283 @VrajeshChary @devikasingh098 @GURUTEJGANAPURAPU @Nithesh33758

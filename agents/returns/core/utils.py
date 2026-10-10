@@ -7,7 +7,9 @@ NON_PRODUCT_TERMS = [
     "logo", "screenshot", "document", "graphic", "invoice",
     "unrelated media", "non-product image", "non-product", "non product",
     "screengrab", "receipt", "shipping label", "paper", "label sheet",
-    "blank screen", "clipart", "wallpaper", "illustration"
+    "blank screen", "clipart", "wallpaper", "illustration",
+    "wall", "floor", "scenery", "random scenery", "landscape",
+    "unrelated object", "empty room", "ceiling"
 ]
 
 NON_PRODUCT_PATTERN = re.compile(
@@ -49,7 +51,7 @@ def normalize_text(text: Optional[str]) -> str:
 
 
 def is_non_product_media(text: Optional[str]) -> bool:
-    """Returns True if the given text or filename indicates non-product media (logo, document, etc.)."""
+    """Returns True if the given observed text indicates non-product media (wall, floor, logo, document, etc.)."""
     if not text:
         return False
     norm = normalize_text(text)

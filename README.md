@@ -13,18 +13,20 @@ Integrate the five independently built Round 2 agents into one connected, end-to
 ## What the Pod builds
 
 ```text
-Receiving → Prep → Pack → Returns → Recovery → Final Commerce Outcome
+Specialist Flow: Receiving → Pack (MFN) → Returns (if returned) → Recovery → Final Outcome
 ```
 
-| Member | Agent | Folder |
-|---|---|---|
-| 1 | Receiving Manager | `agents/receiving/` |
-| 2 | Prep Manager | `agents/prep/` |
-| 3 | Pack Manager | `agents/pack/` |
-| 4 | Returns Manager | `agents/returns/` |
-| 5 | Recovery Manager | `agents/recovery/` |
+Our Pod is officially configured as a **Specialist Pod** (`pod.json`, `orchestration/flow.specialist.json`), comprising four operational agents and one dedicated Specialist seat:
 
-Each member owns one agent. The Pod jointly owns the orchestration, shared contracts, workflow state, integration, end-to-end testing, documentation, demo and submission. **No participant owns the final system alone.**
+| Member / Role | Owner | Agent / Component | Folder / Manifest |
+|---|---|---|---|
+| 1 | `@nithesh33758` | Receiving Manager | `agents/receiving/` |
+| 2 | `@VrajeshChary` | Specialist / Integration Engineer | Integration Lead & Prep Seat (`agent: null`) |
+| 3 | `@devikasingh197` | Pack Manager | `agents/pack/` |
+| 4 | `@VrajeshChary` | Returns Manager | `agents/returns/` |
+| 5 | `@nithesh33758` | Recovery Manager | `agents/recovery/` |
+
+In our Specialist flow (`specialist-no-prep-v1`), Prep is omitted from active routing. Recovery evaluates all accumulated upstream evidence and treats missing Prep evidence for inbound fees as silent (preventing false claims). The Pod jointly owns the orchestration, shared contracts, workflow state, integration, end-to-end testing, documentation, demo and submission.
 
 ## Architecture in one picture
 
