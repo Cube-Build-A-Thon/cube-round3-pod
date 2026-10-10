@@ -58,6 +58,45 @@ export const AgentDetail: React.FC<AgentDetailProps> = ({ stage, onNavigate, onW
   if (stage === 'receiving') {
     return (
       <article className="mx-auto w-full max-w-7xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => onNavigate('agents')}
+            className="inline-flex items-center gap-2 rounded-sm font-mono text-[10px] font-bold uppercase tracking-wider text-stone-600 transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            All agents
+          </button>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+            STAGE {String(index + 1).padStart(2, '0')} / {String(POD_AGENTS.length).padStart(2, '0')}
+          </span>
+        </div>
+
+        <ReceivingInspector
+          onNavigateToAgents={() => onNavigate('agents')}
+        />
+
+        <nav aria-label="Agent stage navigation" className="flex items-center justify-between border-t border-stone-300/80 pt-4">
+          {previousAgent ? (
+            <button type="button" onClick={() => onNavigate(`agent-${previousAgent.stage}`)} className="group flex max-w-[45%] items-center gap-2 rounded-sm text-left text-sm text-stone-600 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
+              <ArrowLeft className="h-4 w-4 shrink-0 transition-transform group-hover:-translate-x-0.5" aria-hidden="true" />
+              <span><span className="block font-mono text-[9px] uppercase tracking-wider text-stone-400">Previous stage</span><span className="font-semibold">{previousAgent.name}</span></span>
+            </button>
+          ) : <span />}
+          {nextAgent ? (
+            <button type="button" onClick={() => onNavigate(`agent-${nextAgent.stage}`)} className="group flex max-w-[45%] items-center gap-2 rounded-sm text-right text-sm text-stone-600 hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
+              <span><span className="block font-mono text-[9px] uppercase tracking-wider text-stone-400">Next stage</span><span className="font-semibold">{nextAgent.name}</span></span>
+              <ArrowRight className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+            </button>
+          ) : <span />}
+        </nav>
+      </article>
+    )
+  }
+
+  if (stage === 'recovery') {
+    return (
+      <article className="mx-auto w-full max-w-7xl space-y-6">
   if (stage === 'pack') {
     return (
       <article className="mx-auto w-full max-w-5xl space-y-6">
