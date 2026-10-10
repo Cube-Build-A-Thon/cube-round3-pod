@@ -10,6 +10,21 @@ import type {
 const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL
 export const API_BASE_URL = RAW_BASE_URL ? RAW_BASE_URL.replace(/\/+$/, '') : '/api'
 
+export function resolveApiUrl(pathOrUrl: string): string {
+  if (!pathOrUrl) return ''
+  if (
+    pathOrUrl.startsWith('http://') ||
+    pathOrUrl.startsWith('https://') ||
+    pathOrUrl.startsWith('blob:') ||
+    pathOrUrl.startsWith('data:')
+  ) {
+    return pathOrUrl
+  }
+  // Strip redundant leading '/api' if present since API_BASE_URL handles the root
+  const cleanPath = pathOrUrl.replace(/^\/?api\/?/, '/').replace(/^\/?/, '/')
+  return `${API_BASE_URL}${cleanPath}`
+}
+
 export class ApiError extends Error {
   status: number
   detail: string
@@ -223,7 +238,14 @@ export const api = {
   async getWarehouseRecords(): Promise<WarehouseReturnRecord[]> {
     try {
       const res = await fetch(`${API_BASE_URL}/returns/warehouse-records`)
-      return await handleResponse<WarehouseReturnRecord[]>(res)
+      const records = await handleResponse<WarehouseReturnRecord[]>(res)
+      return records.map((rec) => ({
+        ...rec,
+        available_images: (rec.available_images || []).map((img) => ({
+          ...img,
+          url: resolveApiUrl(img.url),
+        })),
+      }))
     } catch (err: any) {
       if (err instanceof ApiError) throw err
       throw new ApiError(0, `Failed to load warehouse returns records`, err.message)
@@ -233,7 +255,11 @@ export const api = {
   async getReturnSamples(): Promise<Array<{ filename: string; size_bytes: number; url: string }>> {
     try {
       const res = await fetch(`${API_BASE_URL}/returns/samples`)
-      return await handleResponse<Array<{ filename: string; size_bytes: number; url: string }>>(res)
+      const items = await handleResponse<Array<{ filename: string; size_bytes: number; url: string }>>(res)
+      return items.map((item) => ({
+        ...item,
+        url: resolveApiUrl(item.url),
+      }))
     } catch (err: any) {
       if (err instanceof ApiError) throw err
       throw new ApiError(0, `Failed to load sample return images`, err.message)

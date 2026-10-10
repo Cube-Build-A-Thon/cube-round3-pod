@@ -161,9 +161,7 @@ class VisionConfig:
         self.configured_vision_provider = os.environ.get("VISION_PROVIDER")
 
         active_key = self.openrouter_key or self.gemini_key
-        if active_key and len(active_key) > 14:
-            self.api_key_preview = f"{active_key[:10]}...{active_key[-4:]}"
-        elif active_key:
+        if active_key:
             self.api_key_preview = "configured"
         else:
             self.api_key_preview = None
