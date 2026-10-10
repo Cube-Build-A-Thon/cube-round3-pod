@@ -78,9 +78,9 @@ class ConditionAgent:
             "scratch-free", "defect-free", "blemish-free", "flawless", "mint"
         }:
             return True
-        # Affirmative intact statement such as "the lamp is undamaged", "item is crack-free"
+        # Affirmative intact statement such as "the item is undamaged", "item is crack-free"
         if re.match(
-            r"^(?:the\s+)?(?:item|product|lamp|unit|device|packaging)?\s*(?:is|appears|looks)?\s*(?:completely|totally|entirely)?\s*(?:undamaged|unbroken|intact|pristine|clean|flawless|crack-free|damage-free|defect-free|scratch-free)[\.\,\!]?$",
+            r"^(?:the\s+)?(?:item|product|unit|device|packaging|merchandise)?\s*(?:is|appears|looks)?\s*(?:completely|totally|entirely)?\s*(?:undamaged|unbroken|intact|pristine|clean|flawless|crack-free|damage-free|defect-free|scratch-free)[\.\,\!]?$",
             norm,
         ):
             return True
@@ -113,14 +113,14 @@ class ConditionAgent:
             cleaned = SUFFIX_FREE_RE.sub(" ", cleaned)
             cleaned = NEGATED_DAMAGE_RE.sub(" ", cleaned)
             is_box_only = any(b in cleaned for b in ["box", "packaging", "carton", "parcel", "package"]) and not any(
-                p in cleaned for p in ["product", "item", "lamp", "screen", "cable", "unit", "device", "head", "clamp", "lens", "glass", "cord", "chassis"]
+                p in cleaned for p in ["product", "item", "screen", "cable", "unit", "device", "component", "lens", "glass", "chassis", "housing", "surface", "body", "part"]
             )
             if is_box_only:
                 continue
             if POSITIVE_DAMAGE_RE.search(cleaned) or "mismatch" in cleaned:
                 return True, item
 
-        # 2. Check notes for affirmative descriptive product damage (e.g. broken lamp head)
+        # 2. Check notes for affirmative descriptive product damage
         if notes:
             norm_notes = notes.strip().lower()
             if not cls._is_negated_phrase(norm_notes):
@@ -158,15 +158,63 @@ class ConditionAgent:
             return False
 
         if has_image:
-            notes_str = (image_metadata.get("uncertainty_notes") or "").strip().lower()
+            notes_str = (image_metadata.get("uncertainty_notes") or image_metadata.get("ambiguity") or "").strip().lower()
+            img_quality = image_metadata.get("image_quality") or "good"
+            rec_cat = image_metadata.get("recommended_reason_category")
 
-            # Separate packaging condition from product condition:
-            # 1. Affirmative product damage detection
+            # Rule 8: Gemini/API failure
+            if rec_cat == "api_failure" or str(image_metadata.get("inference_source", "")).startswith("offline_failure_state"):
+                latency_ms = int((time.time() - start_time) * 1000)
+                return CheckResult(
+                    check_key="condition",
+                    verdict=CheckVerdict.UNCERTAIN,
+                    confidence=0.30,
+                    detail={
+                        "amazon_condition": AmazonCondition.UNCERTAIN.value,
+                        "observed_state": "uncertain",
+                        "reason": "model_error",
+                        "category": "api_failure",
+                        "evidence": "Vision model unavailable or API failure; cannot evaluate condition.",
+                        "official_taxonomy": "Amazon Official Condition Guidelines",
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 5: Blurry or unusable image - do NOT guess condition
+            if img_quality in ("blurry", "unusable") or rec_cat in ("blurry_image", "unusable_image"):
+                latency_ms = int((time.time() - start_time) * 1000)
+                is_blurry = img_quality == "blurry" or rec_cat == "blurry_image"
+                cat_name = "blurry_image" if is_blurry else "unusable_image"
+                return CheckResult(
+                    check_key="condition",
+                    verdict=CheckVerdict.UNCERTAIN,
+                    confidence=0.25,
+                    detail={
+                        "amazon_condition": AmazonCondition.UNCERTAIN.value,
+                        "observed_state": "uncertain",
+                        "reason": "poor_image",
+                        "category": cat_name,
+                        "evidence": "Image is too blurry, dark, or unusable for reliable product inspection. Condition cannot be graded.",
+                        "official_taxonomy": "Amazon Official Condition Guidelines",
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 3: Affirmative product damage detection
+            damage_desc = image_metadata.get("damage_description")
             has_affirmative_damage, damage_evidence = self._extract_positive_product_damage(
-                vision_damage,
-                image_metadata.get("uncertainty_notes"),
+                vision_damage if not damage_desc else ([damage_desc] + list(vision_damage)),
+                image_metadata.get("uncertainty_notes") or image_metadata.get("ambiguity"),
                 catalog_product,
             )
+            if not has_affirmative_damage and damage_desc and not self._is_negated_phrase(damage_desc):
+                has_affirmative_damage = True
+                damage_evidence = damage_desc
+            if not has_affirmative_damage and image_metadata.get("condition") == "damaged":
+                has_affirmative_damage = True
+                damage_evidence = damage_desc or "Observed physical damage on product"
             if not has_affirmative_damage and is_consumable_violation(", ".join(vision_damage) if isinstance(vision_damage, list) else str(vision_damage)):
                 has_affirmative_damage = True
                 damage_evidence = "tamper seal breach on consumable product"
@@ -180,7 +228,56 @@ class ConditionAgent:
                     detail={
                         "amazon_condition": AmazonCondition.UNACCEPTABLE.value,
                         "observed_state": "damaged",
+                        "category": "damaged_product",
                         "evidence": f"Visual damage observed: {damage_evidence}. Exceeds acceptable cosmetic wear threshold.",
+                        "official_taxonomy": "Amazon Official Condition Guidelines",
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Direct condition classification from model
+            model_cond = (image_metadata.get("condition") or "").lower()
+            if model_cond == "new":
+                latency_ms = int((time.time() - start_time) * 1000)
+                return CheckResult(
+                    check_key="condition",
+                    verdict=CheckVerdict.PASS,
+                    confidence=0.96,
+                    detail={
+                        "amazon_condition": AmazonCondition.NEW.value,
+                        "observed_state": "new",
+                        "evidence": "Visual inspection confirms item is in new, pristine condition.",
+                        "official_taxonomy": "Amazon Official Condition Guidelines",
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+            if model_cond in ("used_like_new", "like_new"):
+                latency_ms = int((time.time() - start_time) * 1000)
+                return CheckResult(
+                    check_key="condition",
+                    verdict=CheckVerdict.PASS,
+                    confidence=0.94,
+                    detail={
+                        "amazon_condition": AmazonCondition.USED_LIKE_NEW.value,
+                        "observed_state": "opened_unused",
+                        "evidence": "Visual inspection confirms item is in like-new condition.",
+                        "official_taxonomy": "Amazon Official Condition Guidelines",
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+            if model_cond in ("used_good", "good", "used_acceptable", "acceptable"):
+                latency_ms = int((time.time() - start_time) * 1000)
+                return CheckResult(
+                    check_key="condition",
+                    verdict=CheckVerdict.PASS,
+                    confidence=0.90,
+                    detail={
+                        "amazon_condition": AmazonCondition.USED_GOOD.value,
+                        "observed_state": "signs_of_use",
+                        "evidence": "Visual inspection confirms item is in good, acceptable functional condition.",
                         "official_taxonomy": "Amazon Official Condition Guidelines",
                     },
                     model_version=self.model_version,

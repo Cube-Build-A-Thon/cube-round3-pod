@@ -88,6 +88,7 @@ def _input_root() -> Path:
     return Path(os.environ.get("INPUT_DIR", ROOT_DIR / "data" / "input")).resolve()
 
 
+
 def _resolve_input_path(ref: str) -> Path:
     root = _input_root()
     path = (root / ref).resolve()
@@ -117,7 +118,6 @@ def _verify_input_hash(
             f"Input hash mismatch for {path.name}."
         )
 
-
 def _parse_order_lines(raw: str) -> list[dict]:
     """'SKU-A:1;SKU-B:2' -> [{'sku': 'SKU-A', 'quantity': 1}, ...]"""
     items = []
@@ -133,21 +133,25 @@ def _parse_order_lines(raw: str) -> list[dict]:
         items.append({"sku": sku.strip(), "quantity": quantity})
     return items
 
-
 def _get_order_lines(request: dict) -> list:
-    context = request.get("context", {})
-    case = context.get("case", {})
+    context = request.get("context") or {}
+    case = context.get("case") or {}
 
     order_lines = case.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
 
-    subject = request.get("subject", {})
+    subject = request.get("subject") or {}
     order_lines = subject.get("order_lines")
-
-    if order_lines is not None:
+    if order_lines:
         return order_lines
+
+
+    for item in request.get("inputs") or []:
+        if isinstance(item, dict):
+            payload = item.get("payload") or item
+            if isinstance(payload, dict) and payload.get("order_lines"):
+                return payload["order_lines"]
 
     # Fall back to the order record for this unit (tenant-scoped lookup).
     try:
@@ -157,6 +161,7 @@ def _get_order_lines(request: dict) -> list:
 
     return _parse_order_lines(row.get("order_lines"))
 
+    return []
 
 def _format_expected_items(order_lines: list) -> str:
     if not order_lines:
