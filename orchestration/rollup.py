@@ -11,13 +11,14 @@ STATUS (precedence, highest first):
   IN_PROGRESS        some required stages have not run yet
   COMPLETED          every required stage finished and nothing awaits a person
 
-FINAL OUTCOME (precedence, highest first):
+FINAL OUTCOME (precedence, highest first; updated by Pod decision D-007):
+  INCOMPLETE         a required stage did not complete
+  NEEDS_REVIEW       a stage asks for a person (needs_human)
   CLAIM_RECOMMENDED  Recovery's effective verdict is FAIL (a charge is contradicted by evidence)
   EXCEPTION          any stage's effective verdict is FAIL (a real-world problem, no claim)
-  INCOMPLETE         a required stage did not complete
-  NEEDS_REVIEW       a stage asks for a person
   CLEAN              every required stage passed
-UNCERTAIN is never turned into PASS. This is the DEFAULT policy: improve it and document why (docs/decisions.md).
+UNCERTAIN is never turned into PASS. Starter default precedence (CLAIM_RECOMMENDED first) was refined
+by Pod decision D-007 (docs/decisions.md) so human review requests precede claims and align with BLOCKED status.
 """
 from __future__ import annotations
 
@@ -77,23 +78,21 @@ def derive_final_outcome(workflow: dict, evidence: dict, status: str) -> dict | 
     claimable = rec_pair[1]["payload"].get("claimable_usd") if rec_pair else None
     needs_human = bool(incomplete or asks)
 
-    if rec_claim:
-        outcome, verdict = "CLAIM_RECOMMENDED", "FAIL"
-        reason = f"Recovery contradicted at least one charge (claimable ${claimable or 0:.2f})."
-    elif failed:
-        outcome, verdict = "EXCEPTION", "FAIL"
-        reason = f"Failed verdict from: {', '.join(failed)}; no claim recommended."
-    elif incomplete:
+    if incomplete:
         outcome, verdict = "INCOMPLETE", "UNCERTAIN"
         reason = f"Stage did not complete: {', '.join(incomplete)}."
     elif asks:
         outcome, verdict = "NEEDS_REVIEW", "UNCERTAIN"
         reason = f"Human review requested by: {', '.join(asks)}."
+    elif rec_claim:
+        outcome, verdict = "CLAIM_RECOMMENDED", "FAIL"
+        reason = f"Recovery contradicted at least one charge (claimable ${claimable or 0:.2f})."
+    elif failed:
+        outcome, verdict = "EXCEPTION", "FAIL"
+        reason = f"Failed verdict from: {', '.join(failed)}; no claim recommended."
     else:
         outcome, verdict = "CLEAN", "PASS"
         reason = "All applicable stages passed."
-    if needs_human and outcome in ("CLAIM_RECOMMENDED", "EXCEPTION"):
-        reason += f" Flagged for review: {', '.join(incomplete + asks)}."
     return {
         "workflow_id": workflow["workflow_id"], "outcome": outcome, "verdict": verdict, "reason": reason,
         "needs_human": needs_human, "provisional": status != "COMPLETED",

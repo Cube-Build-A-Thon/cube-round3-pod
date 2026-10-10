@@ -76,4 +76,40 @@ A contradiction between documents or data is a **finding**, not a failure. Open 
 
 ## Your Pod's decisions
 
-_Add entries below._
+### D-007 · Final-outcome precedence in rollup and needs_human default in records
+- Date / Owner: 2026-10-08 / @VrajeshChary
+- Context: In `orchestration/rollup.py`, the old rollup could leave workflow status `BLOCKED` while `final_outcome` said `CLAIM_RECOMMENDED`. Specifically, `derive_status` marked the workflow `BLOCKED` when a stage requested human review (`needs_human: True`), but `derive_final_outcome` evaluated `rec_claim` first, returning `CLAIM_RECOMMENDED`. In addition, in `shared/utils/records.py`, `build_record` defaulted `decision["needs_human"]` only to `verdict == "UNCERTAIN"` when `needs_human` was omitted, which did not account for records with `outcome == "pending_review"` or individual checks with verdict `UNCERTAIN`.
+- Options considered:
+  - Option A: Retain the existing precedence in `derive_final_outcome` where `rec_claim` evaluated first, leaving workflow status `BLOCKED` while `final_outcome` reported `CLAIM_RECOMMENDED`. Rejected because integration tests expect a workflow awaiting human review to report final outcome `NEEDS_REVIEW` with verdict `UNCERTAIN`.
+  - Option B: Require caller code to manually pass `needs_human=True` to `build_record` without changing `build_record` defaults or rollup precedence. Rejected because `derive_final_outcome` would still evaluate `rec_claim` ahead of review requests, leaving status `BLOCKED` with outcome `CLAIM_RECOMMENDED`.
+  - Option C: Update `derive_final_outcome` so that incomplete stages produce `INCOMPLETE`; otherwise, a human-review request produces `NEEDS_REVIEW`; otherwise, the rollup considers a Recovery claim (`CLAIM_RECOMMENDED`), a failed stage (`EXCEPTION`), or a clean outcome (`CLEAN`). In `shared/utils/records.py`, update `build_record` so that when `needs_human` is omitted (`needs_human is None`), it defaults to `True` for an `UNCERTAIN` verdict, a `pending_review` outcome, or an `UNCERTAIN` check.
+- Decision: Chose Option C. In `orchestration/rollup.py`, `derive_final_outcome` implements this precedence: incomplete stages produce `INCOMPLETE`; otherwise, a human-review request produces `NEEDS_REVIEW`; otherwise, the rollup considers a Recovery claim (`CLAIM_RECOMMENDED`), a failed stage (`EXCEPTION`), or a clean outcome (`CLEAN`). In `shared/utils/records.py`, `build_record` defaults `needs_human` to `True` for an `UNCERTAIN` verdict, a `pending_review` outcome, or an `UNCERTAIN` check only when `needs_human` is omitted (`needs_human is None`).
+- Why: Human review produces `NEEDS_REVIEW` when there are no pending or errored stages. Incomplete stages still take precedence and produce `INCOMPLETE`. Also, `build_record` infers `needs_human` only when the caller omits it; explicit `True` or `False` values are preserved.
+- Consequences: Incomplete stages produce `INCOMPLETE`; otherwise, any stage requesting review (`needs_human: True`) produces `NEEDS_REVIEW` (`UNCERTAIN`, `provisional: True`). Otherwise, the rollup proceeds to evaluate a Recovery claim, a stage failure, or a clean pass. Explicit boolean values passed for `needs_human` continue to be preserved.
+
+### D-008 · Specialist Pod: no Prep, inbound-defect fees stay SILENT
+- Date / Owner: 2026-10-10 / @kl2400033283 (Specialist / Integration Engineer)
+- Context: The organiser roster for Pod 15 has no Prep Manager (two members are listed as Recovery Manager), so the Pod runs the Specialist flow.
+- Decision: `pod.json` uses `pod_type: specialist` and `orchestration/flow.specialist.json` (Receiving → Pack (MFN) → Returns (returned) → Recovery). `agents/prep/` stays the unused organiser stub, and no agent is duplicated to fill the Prep seat. Recovery treats inbound-defect charges without Prep evidence as SILENT (`UNCERTAIN`, `insufficient_evidence`, never a claim).
+- Consequences: FBA units carry no prep-compliance evidence. That is visible in Recovery's records and in `docs/evaluation.md`, not hidden. Tested by `test_inbound_defect_charges_stay_silent_without_prep_evidence`.
+
+### D-009 · Example-outcome tests use fake agents; real agents are tested separately
+- Date / Owner: 2026-10-10 / @kl2400033283
+- Context: `tests/e2e/test_examples.py` replays the organiser's documented examples, which were written for the stub agents. With the real agents those units now end BLOCKED: Returns is UNCERTAIN without photos. The test was changed (5182374) to run the examples with deterministic `Fake` agents.
+- Decision: Keep that test as a check of the **orchestrator's** routing and final-outcome logic, and state openly that it no longer exercises the real agents. Real-agent behaviour is covered by `tests/e2e/test_specialist_pod.py`: clean, exception, claim, SILENT without Prep, UNCERTAIN + override, injected failure, wrong tenant. It runs offline with no keys.
+- Why: The handbook forbids weakening tests just to make CI green. This keeps both the orchestration check and an honest real-agent check.
+
+### D-010 · Merge conflicts: choose one side, never keep both
+- Date / Owner: 2026-10-10 / @kl2400033283
+- Context: The merge b2d2018 ("Merge branch 'main' into returns") kept both sides of several conflicts. That made `pod.json` and `agents/receiving/agent.json` invalid JSON and gave `agents/pack/app.py` a SyntaxError (with an older copy of Pack pasted in). It also re-added a bug in Recovery that 42ae20d had fixed, and turned `main` red.
+- Decision: The invalid JSON, the Pack SyntaxError and the Recovery regression were repaired on `main` (dc93eb8/f03ab0a). Leftovers fixed afterwards: duplicate Recovery lines in CODEOWNERS, an older copy of Pack's `_get_order_lines` (it ignored order lines passed in `subject`/`inputs` payloads; restored to Devika's version from 77a249d), and a duplicate `return` in `discover_inputs`. Rule for the Pod: resolve a conflict by choosing one side (or merging the logic by hand), then run `make test` before pushing a merge. A file must never contain both versions.
+
+### D-011 · Agents read keys from the environment; `.env` never overrides it
+- Date / Owner: 2026-10-10 / @kl2400033283
+- Decision: Model keys live only in the deployment's environment (never committed; names listed in `.env.example`). Returns now loads `.env` with `override=False`, so the real environment (CI, tests) wins. Tests remove all model keys, so they can never trigger a paid API call.
+- Open (Returns owner): Returns still tries paid Gemini models when a key is present. Model cost per unit must be reported in `model.cost_usd`.
+
+### D-012 · Every runtime dependency is in requirements.txt
+- Date / Owner: 2026-10-10 / @kl2400033283
+- Context: After the deployment change (6c9a220), `orchestration/api.py` accepts file uploads (FastAPI `Form`/`File`), which requires `python-multipart`. It was not in `requirements.txt`. On developer machines it happened to be installed already, so tests passed locally while CI (fresh install, Python 3.12) failed at collection with exit code 2. That is why `main` was red.
+- Decision: Add `python-multipart` to `requirements.txt`. Before merging, verify in a **fresh virtual environment** (`python -m venv`, `pip install -r requirements.txt`, `pytest`), not in a long-lived one.

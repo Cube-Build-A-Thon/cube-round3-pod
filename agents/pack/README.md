@@ -1,44 +1,116 @@
-# agents/pack/  ·  Pack Manager
+# agents/pack/ · Pack Manager
 
-**Owner:** Member 3 (Pack Manager)  (set `owner` in `agent.json` and the handle in `.github/CODEOWNERS`)
+**Owner:** Devika (@devikasingh098) — Pack Manager
 
-> **This folder currently contains an organiser stub** that replays the synthetic Round 2 CSV. It is *not* an agent. Replace it, then replace this README with one that describes what you actually built, how to run it, and its limits.
+> **Pack Manager** is a multimodal outbound packing verification agent. It checks an open shipping box against the expected order using visual evidence and AI-assisted inspection to identify missing items, quantity mismatches, and unexpected extras before the box is sealed.
 
-| | |
-|---|---|
-| **Reads (inputs)** | A photo of the open box before sealing, and the order lines |
-| **Reads (previous evidence)** | Receiving |
-| **Produces** | items present, quantities correct, nothing extra; seal or stop-and-fix |
-| **Recommended `check_key`s** | `items_present, quantities_correct, no_extra_items` |
-| **`decision.outcome` values** | `seal, stop_and_fix, pending_review` |
+---
 
-Only merchant-fulfilled / 3PL units reach Pack (`route == "mfn"`): Amazon packs FBA boxes. Your record is what Returns and Recovery rely on to say what was actually sent, so the `observed_in_box` evidence must be citable.
+## Capabilities & Architecture
 
-## Where your code goes
+| Feature                  | Detail                                                                    |
+| ------------------------ | ------------------------------------------------------------------------- |
+| **Inputs**               | Expected order details and outbound box image evidence                    |
+| **Multimodal Vision**    | Google Gemini analyzes supplied images against expected order information |
+| **Verification Checks**  | `items_present`, `quantities_correct`, `no_extra_items`                   |
+| **Outcomes**             | `seal`, `stop_and_fix`, `pending_review`                                  |
+| **Evidence Handling**    | Validates evidence references and hashes and preserves traceability       |
+| **Uncertainty Handling** | Preserves `UNCERTAIN` when visual evidence is ambiguous or insufficient   |
+| **Tenant Isolation**     | Validates organization context to prevent cross-tenant data access        |
+| **Integration**          | Runs in-process through the shared Round 3 orchestrator                   |
+| **Failure Handling**     | Uses a review-pending outcome when inspection cannot be completed safely  |
+
+---
+
+## Output Contract & Payload
+
+The Pack Manager implements the shared agent interface:
+
+```python
+handle(request: dict) -> dict
+```
+
+The agent evaluates the observed box contents against the expected order and returns structured verification results.
+
+The final outcome follows these rules:
+
+* **`seal`** — Required packing checks pass.
+* **`stop_and_fix`** — A verified packing discrepancy requires correction.
+* **`pending_review`** — Evidence is inconclusive or inspection cannot be completed reliably.
+
+The agent uses visible evidence to support its findings. It must not invent missing items, quantities, or observations, and uncertain findings must not be silently converted into definitive failures.
+
+---
+
+## Architecture
+
+1. **Request Validation** — Validates the incoming request and relevant organization context.
+2. **Evidence Validation** — Checks supplied evidence references and associated hashes.
+3. **AI Inspection** — Sends the expected order and available images to Gemini for a batched inspection.
+4. **Result Normalization** — Converts inspection findings into structured packing checks.
+5. **Decision Generation** — Determines whether the box can be sealed, needs correction, or requires manual review.
+6. **Traceable Response** — Returns the result with relevant evidence and upstream references.
+
+---
+
+## How to Run
+
+### In-Process (Default Pod Mode)
+
+Pack Manager is invoked by the shared orchestrator through its `handle(request: dict)` entry point.
+
+The agent configuration is located at:
+
+```text
+agents/pack/agent.json
+```
+
+Its integration metadata identifies the agent as `pack-manager@1` and configures it for in-process execution.
+
+### Environment Configuration
+
+Configure the Gemini API key using the environment setup expected by the project. Keep API keys out of source control.
+
+### Standalone Testing
+
+Run commands from the Round 3 repository root.
+
+```sh
+pytest tests/integration/test_agent_contracts.py -k pack
+```
+
+To run the complete test suite:
+
+```sh
+pytest
+```
+
+---
+
+## Project Structure
 
 ```text
 agents/pack/
-├── app.py          ← expose  handle(agent_input: dict) -> dict  (an Agent Output). Keep `app = make_app(...)` to serve over HTTP.
-├── agent.json      ← stage · agent_id · owner · mode (inproc | http) · url · an honest `implementation` description
-├── PROVENANCE.md   ← your Round 2 repo URL + commit this came from (create it)
-├── README.md       ← this file, rewritten
-└── …               ← your Round 2 code, prompts, rules, fixtures
+├── agent.json
+├── app.py
+├── gemini.py
+├── README.md
+├── PROVENANCE.md
+└── __init__.py
 ```
 
-## Integrating, in order
+* **`app.py`** — Request handling, validation, result normalization, and decision generation.
+* **`gemini.py`** — Gemini-powered visual packing inspection.
+* **`agent.json`** — Agent identity and integration configuration.
+* **`PROVENANCE.md`** — Implementation provenance and related project context.
 
-1. Read [`INTEGRATION-GUIDE.md`](../../INTEGRATION-GUIDE.md) and [`EVIDENCE-CONTRACT.md`](../../EVIDENCE-CONTRACT.md); open [`examples/end-to-end/`](../../examples/) for a real Agent Output.
-2. In `handle()`: read `request["subject"]`, `request["inputs"]` (your captures) and `request["previous_evidence"]`; run your agent (**one batched model call per unit**); build the record with `shared.utils.records.build_record()` and wrap it with `build_output()`.
-3. **Fail open.** On a model error return `pending_output(...)`, not an exception. Never invent evidence: if you did not see it, say UNCERTAIN with an `uncertain_reason`.
-4. **Refuse other tenants.** Raise `LookupError` (HTTP 404) for a subject that is not under `subject.org_id`.
-5. Make it idempotent: the same `request_id` must yield the same `record_id`. Use the **latest override** of previous evidence (`context.overrides`).
-6. Run `pytest tests/integration/test_agent_contracts.py`, first on the stub (it passes), then on yours, **with your own fixtures**.
-7. Run the whole system: `make run` and `make test`.
+---
 
-## Run on its own
+## Design Principles
 
-```sh
-.venv/bin/uvicorn agents.pack.app:app --port 8103
-curl localhost:8103/health
-```
-Then set `"mode": "http"` in `agent.json` if you want the orchestrator to call it over HTTP.
+* **Evidence-first decisions:** Use supplied evidence rather than assumptions.
+* **No invented observations:** Do not fabricate items, quantities, or visual findings.
+* **Explicit uncertainty:** Escalate ambiguous evidence for review.
+* **Safe failure handling:** Avoid authorizing sealing when verification cannot be completed reliably.
+* **Traceability:** Keep relevant evidence references associated with inspection results.
+* **Shared orchestration:** Integrate with the Round 3 pod rather than maintaining a separate frontend or orchestrator.

@@ -1,10 +1,10 @@
 {
   "stage": "receiving",
-  "agent_id": "receiving-stub@0",
-  "owner": "@github-handle-of-the-owner",
+  "agent_id": "receiving-nithesh@1.0",
+  "owner": "@GURUTEJGANAPURAPU",
   "mode": "inproc",
   "url": "http://localhost:8101",
   "module": "agents.receiving.app",
-  "implementation": "organiser-stub",
-  "notes": "Set mode to \"http\" if your agent is not Python or runs as its own service. Change implementation to a short honest description of what you built."
+  "implementation": "nithesh-visual-receiving-inspection-v1",
+  "notes": "Receiving Manager: multimodal visual receiving inspection and deterministic reconciliation engine owned by @GURUTEJGANAPURAPU."
 }
