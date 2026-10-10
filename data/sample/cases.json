@@ -30,11 +30,18 @@
     "returned": false
   },
   {
-    "org_id": "org_demo_bravo",
-    "unit_id": "UNIT-0006",
-    "route": "mfn",
-    "returned": false
-  },
+  "org_id": "org_demo_bravo",
+  "unit_id": "UNIT-0006",
+  "route": "mfn",
+  "returned": false,
+  "order_lines": [
+    {
+      "sku": "SKU-CABLE-USBC",
+      "quantity": 1,
+      "name": "USB-C Cable"
+    }
+  ]
+},
   {
     "org_id": "org_demo_alpha",
     "unit_id": "UNIT-0007",

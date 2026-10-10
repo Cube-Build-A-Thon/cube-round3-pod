@@ -258,6 +258,333 @@ def _extract_model_checks(
     return checks
 
 
+CHECK_KEYS = ("items_present", "quantities_correct", "no_extra_items")
+
+
+def _uncertain_output(
+    request: dict,
+    *,
+    code: str,
+    message: str,
+    uncertain_reason: str,
+    inputs: list | None = None,
+) -> dict:
+    """A *completed* record: Pack could not judge, so every check is UNCERTAIN and a person must look.
+
+    Unlike pending_output() (status pending/error -> the orchestrator marks the stage errored and the
+    workflow FAILED/INCOMPLETE), this lets the workflow finish BLOCKED/NEEDS_REVIEW. Nothing is hidden:
+    the reason is in the record, and no PASS is ever invented.
+    """
+    safe_id = _safe_request_id(
+        str(request.get("request_id") or request.get("workflow_id", "workflow"))
+    )
+    checks = [
+        check(
+            key,
+            "UNCERTAIN",
+            0.0,
+            detail=f"{code}: {message}",
+            uncertain_reason=uncertain_reason,
+        )
+        for key in CHECK_KEYS
+    ]
+    subject = request.get("subject", {})
+    record = build_record(
+        request,
+        agent_id=AGENT_ID,
+        record_id=f"PCK-{safe_id}",
+        captured_at=utcnow(),
+        unit_scope="order",
+        refs={"order_id": subject.get("subject_id")},
+        checks=checks,
+        outcome="pending_review",
+        verdict="UNCERTAIN",
+        needs_human=True,
+        model={"name": "none", "version": "0", "calls": 0},
+        inputs=inputs or [],
+        reason=f"{code}: {message}",
+    )
+    return build_output(
+        record,
+        next_step="review",
+        reason=f"{message} Manual packing inspection required.",
+    )
+
+
+def _safe_request_id(request_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]", "-", request_id)
+
+
+def _input_root() -> Path:
+    """Captures live under INPUT_DIR (default data/input); the orchestrator's refs are relative to it."""
+    return Path(os.environ.get("INPUT_DIR", ROOT_DIR / "data" / "input")).resolve()
+
+
+
+def _resolve_input_path(ref: str) -> Path:
+    root = _input_root()
+    path = (root / ref).resolve()
+
+    try:
+        path.relative_to(root)
+    except ValueError:
+        raise ValueError("Input path is outside the input directory.")
+
+    if not path.exists():
+        raise FileNotFoundError(f"Input file not found: {ref}")
+
+    return path
+
+
+def _verify_input_hash(
+    path: Path,
+    expected_hash: str | None,
+) -> None:
+    if not expected_hash:
+        return
+
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    if digest != expected_hash:
+        raise ValueError(
+            f"Input hash mismatch for {path.name}."
+        )
+
+def _parse_order_lines(raw: str) -> list[dict]:
+    """'SKU-A:1;SKU-B:2' -> [{'sku': 'SKU-A', 'quantity': 1}, ...]"""
+    items = []
+    for part in str(raw or "").split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        sku, _, qty = part.partition(":")
+        try:
+            quantity = int(qty) if qty.strip() else 1
+        except ValueError:
+            quantity = 1
+        items.append({"sku": sku.strip(), "quantity": quantity})
+    return items
+
+def _get_order_lines(request: dict) -> list:
+    context = request.get("context") or {}
+    case = context.get("case") or {}
+
+    order_lines = case.get("order_lines")
+    if order_lines:
+        return order_lines
+
+    subject = request.get("subject") or {}
+    order_lines = subject.get("order_lines")
+    if order_lines:
+        return order_lines
+
+
+    for item in request.get("inputs") or []:
+        if isinstance(item, dict):
+            payload = item.get("payload") or item
+            if isinstance(payload, dict) and payload.get("order_lines"):
+                return payload["order_lines"]
+
+    # Fall back to the order record for this unit (tenant-scoped lookup).
+    try:
+        row = sample_data.row("pack", subject.get("subject_id"), subject.get("org_id"))
+    except LookupError:
+        return []
+
+    return _parse_order_lines(row.get("order_lines"))
+
+    return []
+
+def _format_expected_items(order_lines: list) -> str:
+    if not order_lines:
+        return "No structured order lines were provided."
+
+    lines = []
+
+    for item in order_lines:
+        if isinstance(item, str):
+            lines.append(f"- {item}")
+            continue
+
+        if isinstance(item, dict):
+            quantity = item.get("quantity", 1)
+
+            name = (
+                item.get("name")
+                or item.get("item_name")
+                or item.get("product_name")
+                or item.get("sku")
+                or "unknown item"
+            )
+
+            sku = item.get("sku")
+
+            if sku:
+                lines.append(
+                    f"- {quantity} x {name} ({sku})"
+                )
+            else:
+                lines.append(
+                    f"- {quantity} x {name}"
+                )
+
+    return "\n".join(lines)
+
+
+def _normalise_verdict(value: str | None) -> str:
+    value = str(value or "").upper().strip()
+
+    if value in {"PASS", "FAIL", "UNCERTAIN"}:
+        return value
+
+    if value in {"OK", "CORRECT", "MATCH", "YES"}:
+        return "PASS"
+
+    if value in {
+        "WRONG",
+        "MISSING",
+        "EXTRA",
+        "INCORRECT",
+        "NO",
+    }:
+        return "FAIL"
+
+    return "UNCERTAIN"
+
+
+_UNCERTAIN_REASONS = {
+    "poor_image", "occluded", "insufficient_evidence", "model_error",
+    "rule_unavailable", "conflicting_evidence", "other",
+}
+
+
+def _normalise_check(
+    raw_check: dict,
+    check_key: str,
+    evidence_refs: list[str],
+) -> dict:
+    verdict = _normalise_verdict(
+        raw_check.get("verdict")
+    )
+
+    confidence = raw_check.get("confidence")
+
+    if confidence is not None:
+        try:
+            confidence = float(confidence)
+            confidence = max(
+                0.0,
+                min(1.0, confidence),
+            )
+        except (TypeError, ValueError):
+            confidence = None
+
+    detail = str(
+        raw_check.get("detail")
+        or raw_check.get("reason")
+        or raw_check.get("observation")
+        or ""
+    )
+
+    return check(
+        check_key,
+        verdict,
+        confidence,
+        expected=raw_check.get("expected"),
+        observed=raw_check.get("observed"),
+        detail=detail,
+        evidence_refs=evidence_refs,
+        uncertain_reason=(
+            raw_check.get("uncertain_reason")
+            if raw_check.get("uncertain_reason") in _UNCERTAIN_REASONS
+            else "other"
+        ),
+    )
+
+
+def _extract_model_checks(
+    result: dict,
+    evidence_refs: list[str],
+) -> list[dict]:
+    raw_checks = result.get("checks", [])
+
+    if isinstance(raw_checks, dict):
+        raw_checks = [
+            {
+                "check_key": key,
+                **value,
+            }
+            if isinstance(value, dict)
+            else {
+                "check_key": key,
+                "verdict": value,
+            }
+            for key, value in raw_checks.items()
+        ]
+
+    by_key = {}
+
+    for item in raw_checks:
+        if not isinstance(item, dict):
+            continue
+
+        key = str(
+            item.get("check_key", "")
+        ).strip().lower()
+
+        if key:
+            by_key[key] = item
+
+    aliases = {
+        "items_present": [
+            "items_present",
+            "item_identification",
+            "item_presence",
+        ],
+        "quantities_correct": [
+            "quantities_correct",
+            "quantity_verification",
+            "quantity_check",
+        ],
+        "no_extra_items": [
+            "no_extra_items",
+            "extra_items",
+            "order_matching",
+            "order_match",
+        ],
+    }
+
+    checks = []
+
+    for final_key, possible_keys in aliases.items():
+        raw = None
+
+        for key in possible_keys:
+            if key in by_key:
+                raw = by_key[key]
+                break
+
+        if raw is None:
+            raw = {
+                "verdict": "UNCERTAIN",
+                "detail": (
+                    "Gemini did not return the required "
+                    f"'{final_key}' check."
+                ),
+                "uncertain_reason": "model_error",
+            }
+
+        checks.append(
+            _normalise_check(
+                raw,
+                final_key,
+                evidence_refs,
+            )
+        )
+
+    return checks
+
+
 def _determine_outcome(
     checks: list[dict],
 ) -> tuple[str, str]:
@@ -371,6 +698,11 @@ def handle(request: dict) -> dict:
             message="GEMINI_API_KEY is not configured.",
             retryable=True,
             agent_id=AGENT_ID,
+        return _uncertain_output(
+            request,
+            code="gemini_not_configured",
+            message="GEMINI_API_KEY is not configured.",
+            uncertain_reason="model_error",
         )
 
     # ---------------------------------------------------------
@@ -383,6 +715,7 @@ def handle(request: dict) -> dict:
 
     if not request_inputs:
         return pending_output(
+        return _uncertain_output(
             request,
             code="no_inputs",
             message=(
@@ -391,6 +724,7 @@ def handle(request: dict) -> dict:
             ),
             retryable=False,
             agent_id=AGENT_ID,
+            uncertain_reason="insufficient_evidence",
         )
 
     image_paths = []
@@ -427,6 +761,15 @@ def handle(request: dict) -> dict:
 
     if not image_paths:
         return pending_output(
+        return _uncertain_output(
+            request,
+            code="invalid_input",
+            message=str(exc),
+            uncertain_reason="insufficient_evidence",
+        )
+
+    if not image_paths:
+        return _uncertain_output(
             request,
             code="no_valid_images",
             message=(
@@ -435,6 +778,7 @@ def handle(request: dict) -> dict:
             ),
             retryable=False,
             agent_id=AGENT_ID,
+            uncertain_reason="insufficient_evidence",
         )
 
     # ---------------------------------------------------------
@@ -601,4 +945,5 @@ def handle(request: dict) -> dict:
 app = make_app(
     STAGE,
     handle,
+)
 )
