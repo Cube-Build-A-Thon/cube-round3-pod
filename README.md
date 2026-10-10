@@ -16,13 +16,15 @@ We implemented a **Specialist Flow**:
 
 Our Pod comprises four operational agents and one dedicated Specialist seat:
 
-| Member / Role | Owner | Agent / Component | Folder / Manifest |
-|---|---|---|---|
-| 1 | `@nithesh33758` | Receiving Manager | `agents/receiving/` |
-| 2 | `@VrajeshChary` | Specialist / Integration Engineer | Integration Lead & Prep Seat (`agent: null`) |
-| 3 | `@devikasingh197` | Pack Manager | `agents/pack/` |
-| 4 | `@VrajeshChary` | Returns Manager | `agents/returns/` |
-| 5 | `@nithesh33758` | Recovery Manager | `agents/recovery/` |
+| # | Member | GitHub | Role | Folder / Manifest |
+|---|---|---|---|---|
+| 1 | Gurutej Ganapurapu | `@GURUTEJGANAPURAPU` | Receiving Manager | `agents/receiving/` |
+| 2 | Thiruvengala Brahmani Mandru | `@kl2400033283` | Specialist / Integration Engineer, orchestration coordinator | orchestration, end-to-end tests (`tests/e2e/test_specialist_pod.py`), evaluation (`docs/evaluation.md`); Prep seat (`agent: null`) |
+| 3 | Devika Singh | `@devikasingh098` | Pack Manager | `agents/pack/` |
+| 4 | M Vrajesh Chary | `@VrajeshChary` | Returns Manager | `agents/returns/` |
+| 5 | Kancharla Venkata Nithesh | `@Nithesh33758` | Recovery Manager | `agents/recovery/` |
+
+Roles and handles match `pod.json`, `.github/CODEOWNERS` and the organiser roster for Pod 15.
 
 In our Specialist flow (`specialist-no-prep-v1`), Prep is intentionally omitted from active routing. Recovery evaluates all accumulated upstream evidence and treats missing Prep evidence for inbound fees as silent (preventing false claims).
 
