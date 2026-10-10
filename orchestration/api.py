@@ -417,8 +417,89 @@ async def inspect_return(
                         shutil.copy2(p, target)
 
 
+@app.post("/pack/inspect")
+async def inspect_pack(
+    file: UploadFile | None = File(None),
+    files: list[UploadFile] = File(None),
+    unit_id: str | None = Form(None),
+    sku: str | None = Form(None),
+    org_id: str | None = Form(None),
+) -> dict:
+    input_root = Path(os.environ.get("INPUT_DIR", ROOT / "data" / "input"))
+
+    uploaded_files: list[UploadFile] = []
+    if file and file.filename:
+        uploaded_files.append(file)
+    if files:
+        for f in files:
+            if f and f.filename and f not in uploaded_files:
+                uploaded_files.append(f)
+
+    target_unit_id = unit_id or "UNIT-0008"
+    target_org_id = org_id or "org_demo_alpha"
+    target_sku = sku or "SKU-BOTTLE-750"
+
+    pack_dir = input_root / target_unit_id / "pack"
+    backup_dir = input_root / target_unit_id / "pack_samples_backup"
+
+    if not backup_dir.is_dir() and pack_dir.is_dir():
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        for p in pack_dir.iterdir():
+            if p.is_file() and not p.name.startswith("."):
+                shutil.copy2(p, backup_dir / p.name)
+
+    if uploaded_files:
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        for p in pack_dir.iterdir():
+            if p.is_file() and not p.name.startswith("."):
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        for idx, up_file in enumerate(uploaded_files):
+            ext = Path(up_file.filename or "").suffix.lower()
+            if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+                raise HTTPException(400, f"Please upload a valid JPG or PNG image. Invalid file: {up_file.filename}")
+            safe_name = Path(up_file.filename or f"upload_{idx}.jpg").name
+            target_path = pack_dir / safe_name
+            contents = await up_file.read()
+            target_path.write_bytes(contents)
+    else:
+        if backup_dir.is_dir():
+            pack_dir.mkdir(parents=True, exist_ok=True)
+            for p in backup_dir.iterdir():
+                if p.is_file() and not p.name.startswith("."):
+                    target = pack_dir / p.name
+                    if not target.exists():
+                        shutil.copy2(p, target)
+
+    case = {
+        "org_id": target_org_id,
+        "unit_id": target_unit_id,
+        "route": "mfn",
+        "returned": False,
+        "order_lines": [{"sku": target_sku, "quantity": 1}],
+    }
+    inspect_flow = {"flow_id": "pack-inspection", "steps": [{"stage": "pack"}]}
+    wf = new_workflow(case, inspect_flow)
+    wf["workflow_id"] = f"WF-PACK-INSPECT-{int(time.time()*1000)}"
+    try:
+        wf = advance(wf, inspect_flow, STORE)
+        return bundle(wf, STORE)
+    except Exception as exc:
+        raise HTTPException(500, f"Analysis could not be completed: {exc}") from exc
+    finally:
+        if backup_dir.is_dir():
+            for p in backup_dir.iterdir():
+                if p.is_file() and not p.name.startswith("."):
+                    target = pack_dir / p.name
+                    if not target.exists():
+                        shutil.copy2(p, target)
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8100))
     host = os.environ.get("HOST", "0.0.0.0")
     uvicorn.run("orchestration.api:app", host=host, port=port)
+
