@@ -75,15 +75,17 @@ The agent-level `status` (`completed` / `pending` / `error`) is a different, sma
 
 ## 6. Final outcome
 
-Derived, highest precedence first. This is the **default policy**: improve it and justify the change in [`docs/decisions.md`](docs/decisions.md).
+Derived, highest precedence first. Under **Pod Decision D-007** ([`docs/decisions.md`](docs/decisions.md)), our Pod's deliberate final-outcome policy prioritizes safety: incomplete runs and human review requests precede claims, ensuring workflows awaiting human inspection (`BLOCKED`) do not prematurely issue claims.
 
-| Condition | Final outcome | Meaning |
-|---|---|---|
-| Recovery's effective verdict is FAIL | `CLAIM_RECOMMENDED` | A charge is contradicted by evidence. `claimable_usd` set. |
-| Any other stage's effective verdict is FAIL | `EXCEPTION` | A real-world problem was found; no claim to make from it. |
-| A required stage did not complete | `INCOMPLETE` | The system could not finish judging. |
-| A stage asks for a human | `NEEDS_REVIEW` | A person must look. |
-| Otherwise | `CLEAN` | Every required stage passed. |
+| Precedence | Condition | Final outcome | Meaning |
+|---|---|---|---|
+| 1 (Highest) | A required stage did not complete (error or pending) | `INCOMPLETE` | The system could not finish judging. |
+| 2 | A stage asks for a human (`needs_human: true`) | `NEEDS_REVIEW` | A person must look; aligns with `BLOCKED` status. |
+| 3 | Recovery's effective verdict is FAIL | `CLAIM_RECOMMENDED` | A charge is contradicted by evidence. `claimable_usd` set. |
+| 4 | Any other stage's effective verdict is FAIL | `EXCEPTION` | A real-world problem was found; no claim to make from it. |
+| 5 (Lowest) | Otherwise | `CLEAN` | Every required stage passed cleanly. |
+
+> **Deliberate Pod Policy (Decision D-007):** The starter kit initially placed `CLAIM_RECOMMENDED` ahead of `INCOMPLETE` and `NEEDS_REVIEW`. Pod Decision D-007 deliberately superseded that default order with the safety-first precedence above.
 
 Safeguards: `needs_human` is also set on a claim or exception that rests on an incomplete or uncertain stage; `provisional` is true whenever the status is not `COMPLETED`; `contributing_records` always lists the evidence behind the outcome (an outcome with no evidence is a bug); `effective_verdicts` shows each stage's verdict after overrides.
 

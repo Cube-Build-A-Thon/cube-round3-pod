@@ -9,7 +9,7 @@ Evaluates 5 core dimensions:
 5. Visual features
 
 Verdict strictly: PASS, FAIL, or UNCERTAIN. Never guesses.
-Only FAILS when the detected object is genuinely different (e.g. lamp expected vs shoes detected).
+Only FAILS when the detected object is genuinely different (e.g. expected product vs conflicting product category).
 """
 
 import re
@@ -19,100 +19,38 @@ from ..catalog import CATALOGUE, ProductDefinition, get_product_by_sku
 from ..models import CheckResult, CheckVerdict
 from ..utils import is_non_product_media, normalize_text
 
-SEMANTIC_TAXONOMY: Dict[str, Dict[str, Any]] = {
-    "SKU-LAMP-LED": {
-        "category_names": ["home & office", "lighting", "office lighting", "home decor"],
-        "category_keywords": [
-            "lamp", "desk lamp", "architect lamp", "reading light", "task light",
-            "table lamp", "swing arm lamp", "articulated lamp", "led lamp", "lighting",
-            "luminaire", "clamp lamp", "work light", "gooseneck", "light"
-        ],
-        "key_components": ["lamp", "arm", "clamp", "base", "usb", "cable", "cord", "led", "shade", "socket", "head"],
-        "visual_features": ["articulated", "swing arm", "adjustable", "clamp", "dimmable", "touch control", "metal", "desk", "architect", "black", "gooseneck", "flexible", "hinge"],
-        "brand_affiliations": ["amazonbasics", "generic", "architect", "unbranded"],
-    },
-    "SKU-PUZZLE-500": {
-        "category_names": ["toys & games", "games & puzzles", "puzzles"],
-        "category_keywords": [
-            "puzzle", "jigsaw", "jigsaw puzzle", "picture puzzle", "board game", "floor puzzle", "panoramic puzzle", "game"
-        ],
-        "key_components": ["puzzle pieces", "pieces", "poster", "box", "cardboard"],
-        "visual_features": ["panoramic", "landscape", "500-piece", "interlocking", "cardboard", "scenic"],
-        "brand_affiliations": ["generic", "unbranded", "ravensburger", "buffalo"],
-    },
-    "SKU-TOWEL-BLU": {
-        "category_names": ["sports & outdoors", "home & bath", "textiles"],
-        "category_keywords": [
-            "towel", "beach towel", "gym towel", "bath towel", "microfiber towel", "sports towel", "washcloth", "cloth"
-        ],
-        "key_components": ["towel", "cloth", "hanging loop", "fabric"],
-        "visual_features": ["microfiber", "absorbent", "navy", "blue", "woven", "folded", "quick drying"],
-        "brand_affiliations": ["generic", "unbranded"],
-    },
-    "SKU-BOTTLE-750": {
-        "category_names": ["kitchen & dining", "sports & outdoors", "drinkware"],
-        "category_keywords": [
-            "water bottle", "bottle", "flask", "thermos", "tumbler", "sports bottle", "insulated bottle", "canteen", "drink bottle", "drinkware"
-        ],
-        "key_components": ["bottle", "lid", "cap", "spout", "flask", "straw"],
-        "visual_features": ["stainless steel", "insulated", "cylindrical", "double wall", "metal", "750ml", "leak proof"],
-        "brand_affiliations": ["generic", "unbranded", "hydro", "klean"],
-    },
-    "SKU-SERUM-30": {
-        "category_names": ["beauty & personal care", "skincare", "cosmetics"],
-        "category_keywords": [
-            "serum", "facial serum", "face serum", "dropper bottle", "face oil", "skincare", "cosmetic", "essence", "dropper"
-        ],
-        "key_components": ["bottle", "dropper", "pipette", "vial", "leaflet", "glass"],
-        "visual_features": ["glass", "amber bottle", "dropper", "30ml", "liquid", "vitamin c", "applicator"],
-        "brand_affiliations": ["generic", "unbranded"],
-    },
-    "SKU-PROT-1KG": {
-        "category_names": ["health & household", "sports nutrition", "supplements"],
-        "category_keywords": [
-            "protein powder", "protein", "whey", "whey protein", "isolate", "powder", "nutritional supplement", "powder tub", "supplement"
-        ],
-        "key_components": ["tub", "container", "scoop", "lid", "seal", "jar"],
-        "visual_features": ["tub", "hdpe", "powder", "foil seal", "vanilla", "1kg", "large container", "jar"],
-        "brand_affiliations": ["generic", "unbranded", "optimum"],
-    },
-    "SKU-LEASH-6FT": {
-        "category_names": ["pet supplies", "dog supplies", "pet accessories"],
-        "category_keywords": [
-            "leash", "dog leash", "pet lead", "rope leash", "lead", "dog rope", "training lead"
-        ],
-        "key_components": ["leash", "rope", "clasp", "handle", "snap hook", "clip"],
-        "visual_features": ["mountain climbing rope", "climbing rope", "braided", "padded handle", "clasp", "reflective", "nylon", "zinc alloy"],
-        "brand_affiliations": ["generic", "unbranded"],
-    },
-    "SKU-CANDLE-3": {
-        "category_names": ["home & kitchen", "home decor", "aromatherapy"],
-        "category_keywords": [
-            "candle", "candles", "candle set", "scented candle", "aromatherapy candle", "soy candle", "jar candle", "wax candle"
-        ],
-        "key_components": ["candle", "jars", "lids", "box", "gift box", "wax", "wick"],
-        "visual_features": ["amber glass", "soy wax", "gift set", "trio", "metal lid", "scented", "jars"],
-        "brand_affiliations": ["generic", "unbranded"],
-    },
-    "SKU-MUG-11": {
-        "category_names": ["kitchen & dining", "dining & tableware", "drinkware"],
-        "category_keywords": [
-            "mug", "mugs", "coffee mug", "coffee cup", "cup", "cups", "ceramic mug", "teacup"
-        ],
-        "key_components": ["mug", "cup", "handle", "ceramic"],
-        "visual_features": ["ceramic", "matte", "handle", "11oz", "pack of 2", "stoneware"],
-        "brand_affiliations": ["generic", "unbranded"],
-    },
-    "SKU-CABLE-USBC": {
-        "category_names": ["electronics", "mobile accessories", "cables"],
-        "category_keywords": [
-            "cable", "usb cable", "usb-c cable", "type-c cable", "charging cable", "cord", "data cable", "wire", "fast charger"
-        ],
-        "key_components": ["cable", "cord", "connector", "usb-c", "plug"],
-        "visual_features": ["braided", "nylon", "usb-c", "2m", "black", "connectors", "fast charging"],
-        "brand_affiliations": ["generic", "unbranded", "anker"],
-    },
-}
+def _build_product_taxonomy(catalog_product: Optional[ProductDefinition]) -> Dict[str, Any]:
+    """Dynamically builds semantic taxonomy keywords from any ProductDefinition."""
+    if not catalog_product:
+        return {
+            "category_keywords": [],
+            "key_components": [],
+            "visual_features": [],
+            "brand_affiliations": [],
+        }
+
+    title_words = [
+        w.lower() for w in re.findall(r"[A-Za-z0-9]+", catalog_product.title)
+        if len(w) > 2 and w.lower() not in {"and", "the", "for", "with", "set", "pack", "pro", "new"}
+    ]
+    cat_words = [
+        w.lower() for w in re.findall(r"[A-Za-z0-9]+", catalog_product.category)
+        if len(w) > 2 and w.lower() not in {"and", "the", "for", "with"}
+    ]
+    parts_words: List[str] = []
+    for p in catalog_product.expected_parts:
+        parts_words.extend([
+            w.lower() for w in re.findall(r"[A-Za-z0-9]+", p)
+            if len(w) > 2 and w.lower() not in {"and", "the", "for", "with"}
+        ])
+
+    return {
+        "category_keywords": list(dict.fromkeys(cat_words + title_words)),
+        "key_components": list(dict.fromkeys(catalog_product.expected_parts + parts_words)),
+        "visual_features": list(dict.fromkeys(title_words)),
+        "brand_affiliations": [str(getattr(catalog_product, "brand", "")).lower()] if getattr(catalog_product, "brand", None) else [],
+    }
+
 
 INCOMPATIBLE_CATEGORIES: Dict[str, Dict[str, Any]] = {
     "footwear": {
@@ -161,14 +99,6 @@ for _cat_id, _cat_info in INCOMPATIBLE_CATEGORIES.items():
         re.IGNORECASE,
     )
 
-_TAXONOMY_PATTERNS: Dict[str, Dict[str, List[Tuple[str, re.Pattern]]]] = {}
-for _sku, _tax in SEMANTIC_TAXONOMY.items():
-    _TAXONOMY_PATTERNS[_sku] = {
-        "category_keywords": [(kw, re.compile(r"\b" + re.escape(kw) + r"\b", re.IGNORECASE)) for kw in _tax.get("category_keywords", [])],
-        "key_components": [(comp, [re.compile(r"\b" + re.escape(t) + r"\b", re.IGNORECASE) for t in comp.split() if len(t) > 2]) for comp in _tax.get("key_components", [])],
-        "visual_features": [(feat, re.compile(r"\b" + re.escape(feat) + r"\b", re.IGNORECASE)) for feat in _tax.get("visual_features", []) if len(feat) > 3],
-    }
-
 
 class IdentityAgent:
     def __init__(self, model_version: str = "semantic-identity-agent-v3.0"):
@@ -206,21 +136,72 @@ class IdentityAgent:
             )
 
         has_image = image_metadata.get("has_image", False)
-        detected_prod = image_metadata.get("detected_product")
+        detected_prod = image_metadata.get("detected_product") or image_metadata.get("product_identity") or image_metadata.get("observed_product")
         detected_brand = image_metadata.get("detected_brand")
-        visible_parts = image_metadata.get("visible_parts") or []
-        image_filename = image_metadata.get("image_filename") or image_metadata.get("image_analyzed")
+        visible_parts = image_metadata.get("visible_parts") or image_metadata.get("observed_components") or []
 
-        vision_uncertain = bool(image_metadata.get("uncertainty_notes"))
+        vision_uncertain = bool(image_metadata.get("uncertainty_notes")) or bool(image_metadata.get("ambiguity"))
         vision_confidence = float(image_metadata.get("confidence", 0.95))
 
         identity_signal = observed_labels.get("identity_match")
         observed_sku = observed_labels.get("observed_sku") or image_metadata.get("detected_sku")
         wrong_item_detected = observed_labels.get("wrong_item_detected", False) or identity_signal == "no"
 
+        rec_category = image_metadata.get("recommended_reason_category")
+        is_product_val = image_metadata.get("is_product")
+        img_quality = image_metadata.get("image_quality") or "good"
+
         if has_image:
-            if wrong_item_detected or (observed_sku and observed_sku != ordered_sku):
+            # Rule 8: Gemini/API failure
+            if rec_category == "api_failure" or str(image_metadata.get("inference_source", "")).startswith("offline_failure_state"):
                 latency_ms = int((time.time() - start_time) * 1000)
+                msg = image_metadata.get("uncertainty_notes") or "Vision model offline or unable to identify item from visual evidence without API key. Returning uncertainty; manual inspection required."
+                return CheckResult(
+                    check_key="identity",
+                    verdict=CheckVerdict.UNCERTAIN,
+                    confidence=0.30,
+                    detail={
+                        "ordered_sku": ordered_sku,
+                        "ordered_asin": ordered_asin,
+                        "matched_expected": None,
+                        "category": "api_failure",
+                        "reason": msg,
+                        "evidence": msg,
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 5: Blurry or unusable image
+            if img_quality in ("blurry", "dark", "obstructed", "tiny", "corrupted", "unusable") or rec_category in ("blurry_image", "unusable_image"):
+                latency_ms = int((time.time() - start_time) * 1000)
+                is_blurry = img_quality == "blurry" or rec_category == "blurry_image" or "blur" in str(image_metadata.get("uncertainty_notes", "")).lower()
+                cat_name = "blurry_image" if is_blurry else "unusable_image"
+                user_msg = (
+                    "Image is too blurry to reliably inspect the returned item. Please send a clear photo showing the full product and its components."
+                    if is_blurry
+                    else "Image is unusable, corrupted, or obstructed. Please send a clear photo showing the full product and its components."
+                )
+                return CheckResult(
+                    check_key="identity",
+                    verdict=CheckVerdict.UNCERTAIN,
+                    confidence=0.25,
+                    detail={
+                        "ordered_sku": ordered_sku,
+                        "ordered_asin": ordered_asin,
+                        "matched_expected": None,
+                        "category": cat_name,
+                        "reason": user_msg,
+                        "evidence": user_msg,
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 6: Non-product image
+            if is_product_val is False or rec_category == "non_product_image" or is_non_product_media(str(detected_prod or "")):
+                latency_ms = int((time.time() - start_time) * 1000)
+                user_msg = "No recognizable returned product was detected. Please upload a clear image of the actual item."
                 return CheckResult(
                     check_key="identity",
                     verdict=CheckVerdict.FAIL,
@@ -229,15 +210,85 @@ class IdentityAgent:
                         "ordered_sku": ordered_sku,
                         "ordered_asin": ordered_asin,
                         "matched_expected": False,
+                        "is_non_product": True,
+                        "physical_product_detected": False,
+                        "category": "non_product_image",
+                        "reason": user_msg,
+                        "evidence": user_msg,
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 2: Wrong product (explicit flag, swapped SKU, or visual model match=False)
+            exp_match = image_metadata.get("expected_product_match")
+            if wrong_item_detected or (observed_sku and observed_sku != ordered_sku) or exp_match is False or rec_category == "wrong_product":
+                latency_ms = int((time.time() - start_time) * 1000)
+                disp_detected = detected_prod or image_metadata.get("observed_product") or "mismatched item"
+                evidence_msg = f"Returned item does not match ordered SKU {ordered_sku} ({catalog_product.title}). Swapped item detected: observed '{disp_detected}'."
+                return CheckResult(
+                    check_key="identity",
+                    verdict=CheckVerdict.FAIL,
+                    confidence=0.96,
+                    detail={
+                        "ordered_sku": ordered_sku,
+                        "ordered_asin": ordered_asin,
+                        "matched_expected": False,
+                        "category": "wrong_product",
                         "detected_sku": observed_sku or "MISMATCHED_RETURN_ITEM",
-                        "evidence": f"Returned item does not match ordered SKU {ordered_sku} ({catalog_product.title}). Swapped item detected.",
+                        "detected_product": disp_detected,
+                        "evidence": evidence_msg,
+                        "reason": evidence_msg,
                         "comparison": {
-                            "category": {"match": False, "note": "Explicit wrong item flag or swapped SKU"},
+                            "category": {"match": False, "note": "Explicit wrong product / swapped SKU"},
                             "key_components": {"match": False},
                             "brand": {"match": False},
                             "sku_metadata": {"match": False, "observed_sku": observed_sku},
                             "visual_features": {"match": False},
                         },
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 7: Ambiguous / multiple items / conflicting evidence
+            ambiguity_val = image_metadata.get("ambiguity") or image_metadata.get("uncertainty_notes")
+            if rec_category == "ambiguous_multi" or (ambiguity_val and any(term in str(ambiguity_val).lower() for term in ["multiple", "conflict", "ambiguous", "contradict"])):
+                latency_ms = int((time.time() - start_time) * 1000)
+                msg = f"Ambiguous product identity / conflicting images: {ambiguity_val}. Cannot reliably verify target returned item."
+                return CheckResult(
+                    check_key="identity",
+                    verdict=CheckVerdict.UNCERTAIN,
+                    confidence=0.50,
+                    detail={
+                        "ordered_sku": ordered_sku,
+                        "ordered_asin": ordered_asin,
+                        "matched_expected": None,
+                        "category": "ambiguous_multi",
+                        "evidence": msg,
+                        "reason": msg,
+                    },
+                    model_version=self.model_version,
+                    latency_ms=latency_ms,
+                )
+
+            # Rule 1: Correct product direct confirmation from multimodal model
+            if exp_match is True:
+                latency_ms = int((time.time() - start_time) * 1000)
+                return CheckResult(
+                    check_key="identity",
+                    verdict=CheckVerdict.PASS,
+                    confidence=0.96,
+                    detail={
+                        "ordered_sku": ordered_sku,
+                        "ordered_asin": ordered_asin,
+                        "catalog_title": catalog_product.title,
+                        "detected_product": detected_prod or catalog_product.title,
+                        "detected_brand": detected_brand or getattr(catalog_product, "brand", None),
+                        "matched_expected": True,
+                        "category": "correct_product",
+                        "evidence": f"Vision verified item matches expected product: {catalog_product.title}.",
+                        "reason": f"Correct product verified: Observed item matches {catalog_product.title}.",
                     },
                     model_version=self.model_version,
                     latency_ms=latency_ms,
@@ -272,7 +323,6 @@ class IdentityAgent:
                 detected_prod=detected_prod,
                 detected_brand=detected_brand,
                 visible_parts=visible_parts,
-                image_filename=image_filename,
             )
 
             latency_ms = int((time.time() - start_time) * 1000)
@@ -293,6 +343,7 @@ class IdentityAgent:
                     "evidence": semantic_res["reason"],
                     "reason": semantic_res["reason"],
                     "comparison": semantic_res["comparison"],
+                    "category": "wrong_product" if semantic_res["verdict"] == CheckVerdict.FAIL else ("correct_product" if semantic_res["verdict"] == CheckVerdict.PASS else None),
                 },
                 model_version=self.model_version,
                 latency_ms=latency_ms,
@@ -308,6 +359,7 @@ class IdentityAgent:
                     "ordered_asin": ordered_asin,
                     "matched_expected": False,
                     "evidence": f"Operator confirmed item mismatch for SKU {ordered_sku}.",
+                    "category": "wrong_product",
                 },
                 model_version=self.model_version,
                 latency_ms=int((time.time() - start_time) * 1000),
@@ -324,6 +376,7 @@ class IdentityAgent:
                     "matched_expected": True,
                     "catalog_title": catalog_product.title,
                     "evidence": f"Verified physical bench inspection match for {catalog_product.title}.",
+                    "category": "correct_product",
                 },
                 model_version=self.model_version,
                 latency_ms=int((time.time() - start_time) * 1000),
@@ -337,6 +390,7 @@ class IdentityAgent:
                     "ordered_sku": ordered_sku,
                     "ordered_asin": ordered_asin,
                     "evidence": "Operator marked identity as uncertain; insufficient evidence to verify SKU.",
+                    "category": "ambiguous_multi",
                 },
                 model_version=self.model_version,
                 latency_ms=int((time.time() - start_time) * 1000),
@@ -362,7 +416,6 @@ class IdentityAgent:
         detected_prod: str,
         detected_brand: Optional[str] = None,
         visible_parts: Optional[List[str]] = None,
-        image_filename: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Performs semantic product matching across 5 dimensions:
         1. Product category
@@ -371,17 +424,14 @@ class IdentityAgent:
         4. SKU metadata
         5. Visual features
 
-        Only FAILS when the detected object is genuinely different (e.g. lamp expected vs shoes detected).
+        Only FAILS when the detected object is genuinely different.
         """
         visible_parts = visible_parts or []
         norm_detected = normalize_text(detected_prod)
         norm_parts = [normalize_text(p) for p in visible_parts]
-        norm_filename = normalize_text(image_filename or "")
-        combined_text = f"{norm_detected} {' '.join(norm_parts)} {norm_filename}"
+        combined_text = f"{norm_detected} {' '.join(norm_parts)}".strip()
 
-        patterns = _TAXONOMY_PATTERNS.get(ordered_sku, {})
-        taxonomy = SEMANTIC_TAXONOMY.get(ordered_sku, {})
-
+        taxonomy = _build_product_taxonomy(catalog_product)
         norm_title = normalize_text(catalog_product.title)
         norm_category = normalize_text(catalog_product.category)
 
@@ -394,7 +444,7 @@ class IdentityAgent:
                 continue
 
             cat_pat = _INCOMPATIBLE_PATTERNS.get(cat_id)
-            if cat_pat and (cat_pat.search(norm_detected) or cat_pat.search(norm_filename)):
+            if cat_pat and cat_pat.search(norm_detected):
                 if cat_id == "non_product":
                     return {
                         "verdict": CheckVerdict.FAIL,
@@ -422,28 +472,27 @@ class IdentityAgent:
                     },
                 }
 
-        cat_pairs = patterns.get("category_keywords") or [
-            (w, re.compile(r"\b" + re.escape(w) + r"\b", re.IGNORECASE))
-            for w in norm_title.split()
+        cat_keywords = taxonomy.get("category_keywords", [])
+        matched_cat_keywords = [
+            kw for kw in cat_keywords
+            if re.search(r"\b" + re.escape(kw) + r"\b", combined_text, re.IGNORECASE)
         ]
-        matched_cat_keywords = [kw for kw, pat in cat_pairs if pat.search(combined_text)]
         category_matched = len(matched_cat_keywords) > 0
 
         if not category_matched:
-            expected_kws = taxonomy.get("category_keywords", [])
-            for other_sku, other_tax in SEMANTIC_TAXONOMY.items():
+            # Check if detected product matches a different known catalogue SKU
+            for other_sku, other_prod in CATALOGUE.items():
                 if other_sku == ordered_sku:
                     continue
+                other_tax = _build_product_taxonomy(other_prod)
                 other_keywords = other_tax.get("category_keywords", [])
-                other_specific = [k for k in other_keywords if k not in expected_kws and len(k) > 3]
+                other_specific = [k for k in other_keywords if k not in cat_keywords and len(k) > 3]
                 for ok in other_specific:
                     if re.search(r"\b" + re.escape(ok) + r"\b", norm_detected, re.IGNORECASE):
-                        other_prod = get_product_by_sku(other_sku)
-                        other_title = other_prod.title if other_prod else other_sku
                         return {
                             "verdict": CheckVerdict.FAIL,
                             "confidence": 0.96,
-                            "reason": f"Product mismatch: Detected '{detected_prod}' matches different merchandise ({other_title} - {other_sku}), not ordered SKU {ordered_sku}.",
+                            "reason": f"Product mismatch: Detected '{detected_prod}' matches different merchandise ({other_prod.title} - {other_sku}), not ordered SKU {ordered_sku}.",
                             "comparison": {
                                 "category": {"match": False, "expected": catalog_product.category, "detected_conflict_sku": other_sku},
                                 "key_components": {"match": False, "expected": catalog_product.expected_parts, "matched": []},
@@ -453,7 +502,7 @@ class IdentityAgent:
                             },
                         }
 
-        comp_pairs = patterns.get("key_components") or [
+        comp_pairs = [
             (p, [re.compile(r"\b" + re.escape(t) + r"\b", re.IGNORECASE) for t in normalize_text(p).split() if len(t) > 2])
             for p in catalog_product.expected_parts
         ]
@@ -462,7 +511,7 @@ class IdentityAgent:
             if any(tp.search(combined_text) for tp in term_pats):
                 matched_components.append(comp_name)
         matched_components = list(dict.fromkeys(matched_components))
-        components_matched = len(matched_components) > 0
+        components_matched = len(matched_components) > 0 or len(catalog_product.expected_parts) == 0
 
         brand_matched = True
         brand_note = "Aligned / Neutral"
@@ -478,8 +527,11 @@ class IdentityAgent:
         matched_sku_tokens = [tok for tok in sku_tokens if re.search(r"\b" + re.escape(tok) + r"\b", combined_text, re.IGNORECASE)]
         sku_metadata_matched = len(matched_sku_tokens) > 0 or category_matched
 
-        feat_pairs = patterns.get("visual_features") or []
-        matched_features = [feat for feat, pat in feat_pairs if pat.search(combined_text)]
+        feat_words = taxonomy.get("visual_features", [])
+        matched_features = [
+            feat for feat in feat_words
+            if re.search(r"\b" + re.escape(feat) + r"\b", combined_text, re.IGNORECASE)
+        ]
         matched_features = list(dict.fromkeys(matched_features))
         features_matched = len(matched_features) > 0
 

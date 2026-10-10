@@ -28,6 +28,7 @@ class DispositionDecision(str, Enum):
     LIQUIDATE = "liquidate"
     DISPOSE = "dispose"
     PENDING_REVIEW = "pending_review"
+    REJECT = "reject"
 
 
 class CheckResult(BaseModel):
@@ -42,6 +43,7 @@ class CheckResult(BaseModel):
 class Outcome(BaseModel):
     decision: DispositionDecision = Field(..., description="restock, refurbish, liquidate, dispose, pending_review")
     reason: str = Field(..., description="Primary justification and rule trigger for the disposition")
+    category: Optional[str] = Field(default=None, description="One of the canonical business rule categories")
     decided_by: str = Field(default="agent:cube-04-returns-manager", description="Entity that made the decision")
     decided_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat(), description="ISO timestamp")
 

@@ -1,10 +1,12 @@
 {
   "stage": "receiving",
   "agent_id": "receiving-nithesh@1.0",
+  "owner": "@nithesh33758",
   "owner": "@GURUTEJGANAPURAPU",
   "mode": "inproc",
   "url": "http://localhost:8101",
   "module": "agents.receiving.app",
   "implementation": "nithesh-visual-receiving-inspection-v1",
+  "notes": "Receiving Manager: multimodal visual receiving inspection and deterministic reconciliation engine owned by @nithesh33758."
   "notes": "Receiving Manager: multimodal visual receiving inspection and deterministic reconciliation engine owned by @GURUTEJGANAPURAPU."
 }

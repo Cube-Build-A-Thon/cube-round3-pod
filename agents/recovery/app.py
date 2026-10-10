@@ -219,6 +219,7 @@ def handle(request: dict) -> dict:
         raise
     except Exception as exc:
         # Fail open: produce pending output rather than crashing workflow
+        return pending_output(request, agent_id=AGENT_ID, error_msg=f"Sydon Recovery failure: {exc}")
         return pending_output(request, code="agent_exception", message=f"Sydon Recovery failure: {exc}", agent_id=AGENT_ID)
 
 

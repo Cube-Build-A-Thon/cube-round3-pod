@@ -98,6 +98,9 @@ def discover_inputs(subject_id: str, stage: str) -> list[dict]:
 
     if not folder.is_dir():
         return []
+    return [{"ref": p.relative_to(root).as_posix(), "kind": KINDS.get(p.suffix.lower(), "other"),
+             "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+            for p in sorted(folder.iterdir()) if p.is_file() and not p.name.startswith(".")]
 
     return [
         {
