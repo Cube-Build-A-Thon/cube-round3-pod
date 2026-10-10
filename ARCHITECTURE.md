@@ -137,9 +137,9 @@ Every failure is **recorded and never becomes success**: a degraded evidence rec
         │                      │                      │                      │
         ▼                      ▼                      ▼                      ▼
 ┌───────────────┐      ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-│   Receiving   │      │  Prep (FBA)   │      │  Pack (MFN)   │      │   Recovery    │
-│    Manager    │      │    Manager    │      │    Manager    │      │    Manager    │
-│ (Starter Stub)│      │ (Starter Stub)│      │ (Starter Stub)│      │ (Starter Stub)│
+│   Receiving   │      │ Prep: NOT IN  │      │  Pack (MFN)   │      │   Recovery    │
+│    Manager    │      │  FLOW (Spec.  │      │    Manager    │      │    Manager    │
+│ (Real Agent)  │      │  Pod, stub)   │      │ (Real Agent)  │      │ (Real Agent)  │
 └───────────────┘      └───────────────┘      └───────────────┘      └───────────────┘
                                ▲                      ▲
                                │                      │
@@ -173,11 +173,11 @@ Our Pod operates as an official **Specialist Pod** (`pod.json`, `orchestration/f
 
 | Role / Agent | Owner | Status | Implementation Details |
 |---|---|---|---|
-| **Receiving Manager** | `@nithesh33758` | **Integrated** | Authoritative team implementation (`agents/receiving/`). Ingests ASN and physical pallet/box evidence, validates barcodes, PO alignment, and physical condition. |
-| **Specialist / Integration Engineer** | `@VrajeshChary` | **Active Role** | Fills the fifth seat (Prep omitted in Specialist flow `specialist-no-prep-v1`). Responsible for cross-agent evidence contracts, orchestration consistency, and multimodal returns intelligence. |
-| **Pack Manager** | `@devikasingh197` | **Integrated** | Authoritative team implementation (`agents/pack/`). Manages merchant-fulfilled / 3PL packaging, box selection, label compliance, and shipping carrier handoff. |
+| **Receiving Manager** | `@GURUTEJGANAPURAPU` | **Integrated** | Authoritative team implementation (`agents/receiving/`). Ingests ASN and physical pallet/box evidence, validates barcodes, PO alignment, and physical condition. |
+| **Specialist / Integration Engineer** | `@kl2400033283` | **Active Role** | Fills the fifth seat (Prep omitted in Specialist flow `specialist-no-prep-v1`). Orchestration coordinator: cross-agent evidence contracts, orchestration consistency, end-to-end and failure tests (`tests/e2e/test_specialist_pod.py`) and evaluation (`docs/evaluation.md`). |
+| **Pack Manager** | `@devikasingh098` | **Integrated** | Authoritative team implementation (`agents/pack/`). Manages merchant-fulfilled / 3PL packaging, box selection, label compliance, and shipping carrier handoff. |
 | **Returns Manager** | `@VrajeshChary` | **Production Multi-Agent** | Complete multi-agent engine (`agents/returns/`):<br>• **VisionAgent:** Multimodal image inspection with real Gemini GenAI analysis and honest uncertainty fallback without filename heuristics.<br>• **IdentityAgent:** Resolves catalog products by SKU/ASIN across 5 semantic dimensions.<br>• **CompletenessAgent:** Resolves multi-image evidence and missing component conflicts.<br>• **ConditionAgent:** Amazon published condition grading; separates box damage from item damage.<br>• **DispositionAgent:** Canonical warehouse routing (`restock`, `refurbish`, `liquidate`, `dispose`, `pending_review`). |
-| **Recovery Manager** | `@nithesh33758` | **Integrated** | Authoritative team implementation (`agents/recovery/`). Cross-references shipping, fee, and defect records against accumulated upstream evidence to calculate audit recoveries. Under Specialist flow, missing Prep evidence for inbound fees is treated as silent (no false claims). |
+| **Recovery Manager** | `@Nithesh33758` | **Integrated** | Authoritative team implementation (`agents/recovery/`). Cross-references shipping, fee, and defect records against accumulated upstream evidence to calculate audit recoveries. Under Specialist flow, missing Prep evidence for inbound fees is treated as silent (no false claims). |
 
 ### 3. Orchestration and State Management
 
