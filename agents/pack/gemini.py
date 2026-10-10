@@ -69,7 +69,7 @@ FALLBACK_MODELS = [
 
 # Total time budget for one inspection across every retry and fallback.
 # A warehouse line must never wait minutes for the model (fail-open rule).
-TOTAL_BUDGET_SECONDS = float(os.getenv("GEMINI_BUDGET_SECONDS", "60"))
+TOTAL_BUDGET_SECONDS = float(os.getenv("GEMINI_BUDGET_SECONDS", "120"))
 
 
 def list_available_models():

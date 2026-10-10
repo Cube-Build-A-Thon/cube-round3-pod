@@ -47,6 +47,7 @@ In your Railway Service → **Variables** tab, set:
 | `CORS_ALLOW_VERCEL_PREVIEWS` | `true` | Allows all `https://*.vercel.app` preview branches. |
 | `LOG_LEVEL` | `INFO` | Logging verbosity (`INFO`, `WARNING`, `DEBUG`). |
 | `LOG_FORMAT` | `json` | Structured JSON log output. |
+| `GEMINI_BUDGET_SECONDS` | `120` | Total time budget for Gemini vision inspection calls (default: 120s). |
 | `PORT` | *(Automatic)* | Provided dynamically by Railway container runtime. |
 
 *(Optional)* If using OpenRouter fallback:
